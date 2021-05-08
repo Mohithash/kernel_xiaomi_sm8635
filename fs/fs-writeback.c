@@ -2355,26 +2355,31 @@ static DECLARE_DELAYED_WORK(dirtytime_work, wakeup_dirtytime_writeback);
 
 static void wakeup_dirtytime_writeback(struct work_struct *w)
 {
-	struct backing_dev_info *bdi;
+        struct backing_dev_info *bdi;
 
-	rcu_read_lock();
-	list_for_each_entry_rcu(bdi, &bdi_list, bdi_list) {
-		struct bdi_writeback *wb;
+        rcu_read_lock();
+        list_for_each_entry_rcu(bdi, &bdi_list, bdi_list) {
+                struct bdi_writeback *wb;
 
-		list_for_each_entry_rcu(wb, &bdi->wb_list, bdi_node)
-			if (!list_empty(&wb->b_dirty_time))
-				wb_wakeup(wb);
-	}
-	rcu_read_unlock();
-	if (dirtytime_expire_interval)
-		schedule_delayed_work(&dirtytime_work, dirtytime_expire_interval * HZ);
+                list_for_each_entry_rcu(wb, &bdi->wb_list, bdi_node)
+                        if (!list_empty(&wb->b_dirty_time))
+                                wb_wakeup(wb);
+        }
+        rcu_read_unlock();
+
+        if (dirtytime_expire_interval)
+                queue_delayed_work(system_power_efficient_wq,
+                                   &dirtytime_work,
+                                   dirtytime_expire_interval * HZ);
 }
 
 static int __init start_dirtytime_writeback(void)
 {
-	if (dirtytime_expire_interval)
-		schedule_delayed_work(&dirtytime_work, dirtytime_expire_interval * HZ);
-	return 0;
+        if (dirtytime_expire_interval)
+                queue_delayed_work(system_power_efficient_wq,
+                                   &dirtytime_work,
+                                   dirtytime_expire_interval * HZ);
+        return 0;
 }
 __initcall(start_dirtytime_writeback);
 
