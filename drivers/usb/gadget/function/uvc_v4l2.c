@@ -390,17 +390,11 @@ uvc_v4l2_enum_format(struct file *file, void *fh, struct v4l2_fmtdesc *f)
 	if (!uformat)
 		return -EINVAL;
 
-	if (uformat->type != UVCG_UNCOMPRESSED)
-		f->flags |= V4L2_FMT_FLAG_COMPRESSED;
-
 	fmtdesc = to_uvc_format(uformat);
 	if (IS_ERR(fmtdesc))
 		return PTR_ERR(fmtdesc);
 
 	f->pixelformat = fmtdesc->fcc;
-
-	strscpy(f->description, fmtdesc->name, sizeof(f->description));
-	f->description[strlen(fmtdesc->name) - 1] = 0;
 
 	return 0;
 }
