@@ -860,6 +860,29 @@ static const char * const uvcg_format_names[] = {
 	"framebased",
 };
 
+static struct uvcg_color_matching *
+uvcg_format_get_default_color_match(struct config_item *streaming)
+{
+	struct config_item *color_matching_item, *cm_default;
+	struct uvcg_color_matching *color_match;
+
+	color_matching_item = config_group_find_item(to_config_group(streaming),
+						     "color_matching");
+	if (!color_matching_item)
+		return NULL;
+
+	cm_default = config_group_find_item(to_config_group(color_matching_item),
+					    "default");
+	config_item_put(color_matching_item);
+	if (!cm_default)
+		return NULL;
+
+	color_match = to_uvcg_color_matching(to_config_group(cm_default));
+	config_item_put(cm_default);
+
+	return color_match;
+}
+
 static ssize_t uvcg_format_bma_controls_show(struct uvcg_format *f, char *page)
 {
 	struct f_uvc_opts *opts;
@@ -1704,7 +1727,14 @@ static struct config_group *uvcg_uncompressed_make(struct config_group *group,
 		'Y',  'U',  'Y',  '2', 0x00, 0x00, 0x10, 0x00,
 		 0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71
 	};
+	struct uvcg_color_matching *color_match;
+	struct config_item *streaming;
 	struct uvcg_uncompressed *h;
+
+	streaming = group->cg_item.ci_parent;
+	color_match = uvcg_format_get_default_color_match(streaming);
+	if (!color_match)
+		return ERR_PTR(-EINVAL);
 
 	h = kzalloc(sizeof(*h), GFP_KERNEL);
 	if (!h)
@@ -1723,6 +1753,8 @@ static struct config_group *uvcg_uncompressed_make(struct config_group *group,
 
 	INIT_LIST_HEAD(&h->fmt.frames);
 	h->fmt.type = UVCG_UNCOMPRESSED;
+	h->fmt.color_matching = color_match;
+	color_match->refcnt++;
 	config_group_init_type_name(&h->fmt.group, name,
 				    &uvcg_uncompressed_type);
 
@@ -1887,7 +1919,14 @@ static const struct config_item_type uvcg_mjpeg_type = {
 static struct config_group *uvcg_mjpeg_make(struct config_group *group,
 						   const char *name)
 {
+	struct uvcg_color_matching *color_match;
+	struct config_item *streaming;
 	struct uvcg_mjpeg *h;
+
+	streaming = group->cg_item.ci_parent;
+	color_match = uvcg_format_get_default_color_match(streaming);
+	if (!color_match)
+		return ERR_PTR(-EINVAL);
 
 	h = kzalloc(sizeof(*h), GFP_KERNEL);
 	if (!h)
@@ -1904,6 +1943,8 @@ static struct config_group *uvcg_mjpeg_make(struct config_group *group,
 
 	INIT_LIST_HEAD(&h->fmt.frames);
 	h->fmt.type = UVCG_MJPEG;
+	h->fmt.color_matching = color_match;
+	color_match->refcnt++;
 	config_group_init_type_name(&h->fmt.group, name,
 				    &uvcg_mjpeg_type);
 
@@ -2297,7 +2338,8 @@ static inline struct uvc_descriptor_header
 enum uvcg_strm_type {
 	UVCG_HEADER = 0,
 	UVCG_FORMAT,
-	UVCG_FRAME
+	UVCG_FRAME,
+	UVCG_COLOR_MATCHING,
 };
 
 /*
@@ -2348,6 +2390,11 @@ static int __uvcg_iter_strm_cls(struct uvcg_streaming_header *h,
 			if (ret)
 				return ret;
 		}
+
+		ret = fun(f->fmt->color_matching, priv2, priv3, 0,
+			  UVCG_COLOR_MATCHING);
+		if (ret)
+			return ret;
 	}
 
 	return ret;
@@ -2411,6 +2458,12 @@ static int __uvcg_cnt_strm(void *priv1, void *priv2, void *priv3, int n,
 		 */
 		*size -= sizeof(u32);
 		*size += frm->frame.b_frame_interval_type * sz;
+	}
+	break;
+	case UVCG_COLOR_MATCHING: {
+		struct uvcg_color_matching *color_match = priv1;
+
+		*size += sizeof(color_match->desc);
 	}
 	break;
 	}
@@ -2534,6 +2587,13 @@ static int __uvcg_fill_strm(void *priv1, void *priv2, void *priv3, int n,
 					frm->frame.b_frame_interval_type);
 	}
 	break;
+	case UVCG_COLOR_MATCHING: {
+		struct uvcg_color_matching *color_match = priv1;
+
+		memcpy(*dest, &color_match->desc, sizeof(color_match->desc));
+		*dest += sizeof(color_match->desc);
+	}
+	break;
 	}
 
 	return 0;
@@ -2573,7 +2633,7 @@ static int uvcg_streaming_class_allow_link(struct config_item *src,
 	if (ret)
 		goto unlock;
 
-	count += 2; /* color_matching, NULL */
+	count += 1; /* NULL */
 	*class_array = kcalloc(count, sizeof(void *), GFP_KERNEL);
 	if (!*class_array) {
 		ret = -ENOMEM;
@@ -2600,7 +2660,6 @@ static int uvcg_streaming_class_allow_link(struct config_item *src,
 		kfree(data_save);
 		goto unlock;
 	}
-	*cl_arr = (struct uvc_descriptor_header *)&opts->uvc_color_matching;
 
 	++target_hdr->linked;
 	ret = 0;
