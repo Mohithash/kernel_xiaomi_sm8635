@@ -707,14 +707,14 @@ static ssize_t uvcg_extension_b_num_controls_store(struct config_item *item,
 	int ret;
 	u8 num;
 
+	ret = kstrtou8(page, 0, &num);
+	if (ret)
+		return ret;
+
 	mutex_lock(su_mutex);
 
 	opts_item = item->ci_parent->ci_parent->ci_parent;
 	opts = to_f_uvc_opts(opts_item);
-
-	ret = kstrtou8(page, 0, &num);
-	if (ret)
-		return ret;
 
 	mutex_lock(&opts->lock);
 	xu->desc.bNumControls = num;
@@ -742,14 +742,14 @@ static ssize_t uvcg_extension_b_nr_in_pins_store(struct config_item *item,
 	int ret;
 	u8 num;
 
+	ret = kstrtou8(page, 0, &num);
+	if (ret)
+		return ret;
+
 	mutex_lock(su_mutex);
 
 	opts_item = item->ci_parent->ci_parent->ci_parent;
 	opts = to_f_uvc_opts(opts_item);
-
-	ret = kstrtou8(page, 0, &num);
-	if (ret)
-		return ret;
 
 	mutex_lock(&opts->lock);
 
@@ -795,14 +795,14 @@ static ssize_t uvcg_extension_b_control_size_store(struct config_item *item,
 	int ret;
 	u8 num;
 
+	ret = kstrtou8(page, 0, &num);
+	if (ret)
+		return ret;
+
 	mutex_lock(su_mutex);
 
 	opts_item = item->ci_parent->ci_parent->ci_parent;
 	opts = to_f_uvc_opts(opts_item);
-
-	ret = kstrtou8(page, 0, &num);
-	if (ret)
-		return ret;
 
 	mutex_lock(&opts->lock);
 
