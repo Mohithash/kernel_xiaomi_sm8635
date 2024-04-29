@@ -202,6 +202,13 @@ struct geni_se_rsc {
 	struct se_rsc_ssr rsc_ssr;
 };
 
+#define TOTAL_VOTE_INDEX		3
+#define VOTE_INDEX_PROP_NAME		"qcom,vote-index"
+#define GENI_TO_CORE_VOTE_PROP_NAME	"qcom,geni-to-core-vote"
+#define CPU_TO_GENI_VOTE_PROP_NAME	"qcom,cpu-to-geni-vote"
+#define GENI_TO_DDR_VOTE_PROP_NAME	"qcom,geni-to-ddr-vote"
+#define INVALID_VOTE			0xFFFFFFFF
+
 /**
  * struct kpi_time - Help to capture KPI information
  * @len: length of the request
