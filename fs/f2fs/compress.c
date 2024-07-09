@@ -1963,7 +1963,7 @@ void f2fs_cache_compressed_page(struct f2fs_sb_info *sbi, struct page *page,
 	if (!f2fs_is_valid_blkaddr(sbi, blkaddr, DATA_GENERIC_ENHANCE_READ))
 		goto out;
 
-	memcpy(page_address(cpage), page_address(page), PAGE_SIZE);
+	copy_page(page_address(cpage), page_address(page));
 	SetPageUptodate(cpage);
 out:
 	f2fs_put_page(cpage, 1);
@@ -1983,8 +1983,8 @@ bool f2fs_load_compressed_page(struct f2fs_sb_info *sbi, struct page *page,
 	if (cpage) {
 		if (PageUptodate(cpage)) {
 			atomic_inc(&sbi->compress_page_hit);
-			memcpy(page_address(page),
-				page_address(cpage), PAGE_SIZE);
+			copy_page(page_address(page),
+				page_address(cpage));
 			hitted = true;
 		}
 		f2fs_put_page(cpage, 1);
