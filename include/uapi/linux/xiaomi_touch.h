@@ -11,6 +11,7 @@
  * @TOUCH_MODE_SINGLETAP_GESTURE: Enables or disables the single-tap gesture.
  * @TOUCH_MODE_DOUBLETAP_GESTURE: Enables or disables the double-tap gesture.
  * @TOUCH_MODE_FOD_PRESS_GESTURE: Enables or disabled the fingerprint-on-display press gesture.
+ * @TOUCH_MODE_FOD_FINGER_STATE: Sysfs node that just reports what it gets told from userspace.
  * @TOUCH_MODE_NONUI_MODE: Disables or enables currently enabled gestures.
  * @TOUCH_MODE_REPORT_RATE: Configures the touchscreen sampling rate.
  * @TOUCH_MODE_FOLD_STATUS: Informs the xiaomi touch driver about current fold status.
@@ -23,6 +24,7 @@ enum touch_mode {
 	TOUCH_MODE_SINGLETAP_GESTURE,
 	TOUCH_MODE_DOUBLETAP_GESTURE,
 	TOUCH_MODE_FOD_PRESS_GESTURE,
+	TOUCH_MODE_FOD_FINGER_STATE,
 	TOUCH_MODE_NONUI_MODE,
 	TOUCH_MODE_REPORT_RATE,
 	TOUCH_MODE_FOLD_STATUS,
