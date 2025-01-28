@@ -133,8 +133,8 @@ enum msm_gpi_tre_type {
 	(ieob << 8) | ch)
 
 /* SPI Config0 TRE */
-#define MSM_GPI_SPI_CONFIG0_TRE_DWORD0(pack, flags, word_size) ((pack << 24) | \
-	(flags << 8) | word_size)
+#define MSM_GPI_SPI_CONFIG0_TRE_DWORD0(pack, flags, word_size, dummy_clk_cnt) (((pack) << 24) | \
+	((flags) << 8) | (word_size) | ((dummy_clk_cnt) << 14))
 #define MSM_GPI_SPI_CONFIG0_TRE_DWORD1(it_del, cs_clk_del, iw_del) \
 	((it_del << 16) | (cs_clk_del << 8) | iw_del)
 #define MSM_GPI_SPI_CONFIG0_TRE_DWORD2(clk_src, clk_div) ((clk_src << 16) | \
