@@ -131,11 +131,11 @@
 #define	QSPI_QUAD_LANE		0x4
 
 #define	QSPI_SINGLE_SDR		0x0
-#define	QSPI_QUAD_DDR		0x1
-#define	QSPI_QUAD_SDR		0x2
-#define	QSPI_DUAL_SDR		0x4
-#define	QSPI_DUAL_DDR		0x6
-#define	QSPI_SINGLE_DDR		0xc
+#define	QSPI_SINGLE_DDR		(BIT(10) | BIT(11))
+#define	QSPI_DUAL_SDR		BIT(10)
+#define	QSPI_DUAL_DDR		(BIT(9) | BIT(10))
+#define	QSPI_QUAD_SDR		BIT(9)
+#define	QSPI_QUAD_DDR		BIT(8)
 
 #define QSPI_DUMMY_CLK_CNT	0x8
 
@@ -1237,7 +1237,8 @@ err_spi_geni_unlock_bus:
 static int qspi_gsi_xfer_prepare(struct spi_transfer *xfer, struct spi_geni_master *mas,
 				 u8 *dummy_clk_cnt, int *flags)
 {
-	int qspi_lanes = 0;
+	unsigned int buswidth;
+	unsigned int mode;
 
 	if (!xfer->tx_buf && !xfer->rx_buf) {
 		SPI_LOG_ERR(mas->ipc, true, mas->dev,
@@ -1246,36 +1247,47 @@ static int qspi_gsi_xfer_prepare(struct spi_transfer *xfer, struct spi_geni_mast
 	}
 
 	if (xfer->tx_buf && xfer->rx_buf) {
-		if (xfer->tx_nbits != xfer->rx_nbits)
+		if (xfer->tx_nbits != xfer->rx_nbits) {
+			SPI_LOG_ERR(mas->ipc, false, mas->dev, "tx_nbits %d, rx_nbits %d\n",
+				    xfer->tx_nbits, xfer->rx_nbits);
 			return -EINVAL;
+		}
 
-		qspi_lanes = xfer->tx_nbits;
+		buswidth = xfer->tx_nbits;
 		*dummy_clk_cnt = QSPI_DUMMY_CLK_CNT;
 	} else if (xfer->tx_buf) {
-		qspi_lanes = xfer->tx_nbits;
+		buswidth = xfer->tx_nbits;
 	} else if (xfer->rx_buf) {
-		qspi_lanes = xfer->rx_nbits;
+		buswidth = xfer->rx_nbits;
 		*dummy_clk_cnt = QSPI_DUMMY_CLK_CNT;
+	} else {
+		SPI_LOG_ERR(mas->ipc, false, mas->dev, "Neither tx_buf nor rx_buf provided.\n");
+		return -EINVAL;
 	}
 
-	switch (qspi_lanes) {
+	switch (buswidth) {
 	case QSPI_SINGLE_LANE:
+		if (mas->qspi_ddr_support) {
+			SPI_LOG_ERR(mas->ipc, false, mas->dev,
+				    "DDR not supported for single lane.\n");
+			return -EPROTONOSUPPORT;
+		}
 		*flags |=  QSPI_SINGLE_SDR;
-		if (mas->qspi_ddr_support)
-			*flags |=  QSPI_SINGLE_DDR;
 		break;
+
 	case QSPI_DUAL_LANE:
-		return -EINVAL;
+		SPI_LOG_ERR(mas->ipc, false, mas->dev, "Dual lane not supported.\n");
+		return -EPROTONOSUPPORT;
 
 	case QSPI_QUAD_LANE:
-		*flags |=  QSPI_QUAD_SDR;
-		if (mas->qspi_ddr_support)
-			*flags |=  QSPI_QUAD_DDR;
+		mode = (mas->qspi_ddr_support) ? QSPI_QUAD_DDR : QSPI_QUAD_SDR;
+		*flags |=  mode;
 		break;
+
 	default:
-		SPI_LOG_ERR(mas->ipc, true, mas->dev,
-			    "%s: Not have support of selected lane configuration.\n", __func__);
-		return -EINVAL;
+		SPI_LOG_ERR(mas->ipc, false, mas->dev, "Unexpected bus width: %u\n", buswidth);
+		*flags |=  QSPI_SINGLE_SDR;
+		break;
 	}
 
 	return 0;
@@ -3217,8 +3229,10 @@ static int spi_geni_probe(struct platform_device *pdev)
 	if (geni_mas->proto == GENI_SE_QSPI) {
 		spi->mode_bits = QSPI_SUPPORTED_MODES;
 
-		/* Enable support of Double data rate (DDR) for QSPI */
-		geni_mas->qspi_ddr_support = true;
+		/*
+		 * DDR Mode is not supported due to HW limitations for now.
+		 */
+		geni_mas->qspi_ddr_support = false;
 	} else {
 		spi->mode_bits = SPI_SUPPORTED_MODES;
 	}
