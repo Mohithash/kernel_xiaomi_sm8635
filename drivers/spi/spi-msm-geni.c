@@ -908,7 +908,10 @@ static struct msm_gpi_tre *setup_go_tre(int cmd, int cs, int rx_len, int flags,
 	if (IS_ERR_OR_NULL(go_tre))
 		return go_tre;
 
-	go_tre->dword[0] = MSM_GPI_SPI_GO_TRE_DWORD0(flags, cs, cmd);
+	if (mas->proto == GENI_SE_QSPI)
+		go_tre->dword[0] = MSM_GPI_QSPI_GO_TRE_DWORD0(flags, cs, cmd);
+	else
+		go_tre->dword[0] = MSM_GPI_SPI_GO_TRE_DWORD0(flags, cs, cmd);
 	go_tre->dword[1] = MSM_GPI_SPI_GO_TRE_DWORD1;
 	go_tre->dword[2] = MSM_GPI_SPI_GO_TRE_DWORD2(rx_len);
 	if (cmd == SPI_RX_ONLY) {

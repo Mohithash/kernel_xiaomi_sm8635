@@ -124,13 +124,17 @@ enum msm_gpi_tre_type {
 	(ieob << 8) | ch)
 
 /* SPI Go TRE */
-#define MSM_GPI_SPI_GO_TRE_DWORD0(flags, cs, command) (((flags) << 20) | \
+#define MSM_GPI_SPI_GO_TRE_DWORD0(flags, cs, command) (((flags) << 24) | \
 	((cs) << 8) | (command))
 #define MSM_GPI_SPI_GO_TRE_DWORD1 (0)
 #define MSM_GPI_SPI_GO_TRE_DWORD2(rx_len) (rx_len)
 #define MSM_GPI_SPI_GO_TRE_DWORD3(link_rx, bei, ieot, ieob, ch) ((0x2 << 20) | \
 	(0x0 << 16) | (link_rx << 11) | (bei << 10) | (ieot << 9) | \
 	(ieob << 8) | ch)
+
+/* QSPI Go TRE */
+#define MSM_GPI_QSPI_GO_TRE_DWORD0(flags, cs, command) (((flags) << 20) | \
+	((cs) << 8) | (command))
 
 /* SPI Config0 TRE */
 #define MSM_GPI_SPI_CONFIG0_TRE_DWORD0(pack, flags, word_size, dummy_clk_cnt) (((pack) << 24) | \
