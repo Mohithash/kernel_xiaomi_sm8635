@@ -938,18 +938,30 @@ static struct msm_gpi_tre *setup_go_tre(int cmd, int cs, int rx_len, int flags,
 	return go_tre;
 }
 
-static struct msm_gpi_tre *setup_dma_tre(struct msm_gpi_tre *tre,
-					dma_addr_t buf, u32 len,
-					struct spi_geni_master *mas,
-					bool is_tx)
+static struct msm_gpi_tre *setup_dma_tre(struct msm_gpi_tre *tre, struct spi_transfer *xfer,
+					 dma_addr_t dma_buf, struct spi_geni_master *mas,
+					 bool is_tx)
 {
 	if (IS_ERR_OR_NULL(tre))
 		return tre;
 
-	tre->dword[0] = MSM_GPI_DMA_W_BUFFER_TRE_DWORD0(buf);
-	tre->dword[1] = MSM_GPI_DMA_W_BUFFER_TRE_DWORD1(buf);
-	tre->dword[2] = MSM_GPI_DMA_W_BUFFER_TRE_DWORD2(len);
-	tre->dword[3] = MSM_GPI_DMA_W_BUFFER_TRE_DWORD3(0, 0, is_tx, 0, 0);
+	if (xfer->len <= IMMEDIATE_DMA_LEN && is_tx) {
+		if (!xfer->tx_buf) {
+			dev_err(mas->dev, "NULL tx_buf for immediate DMA\n");
+			return ERR_PTR(-EINVAL);
+		}
+		tre->dword[0] = 0;
+		tre->dword[1] = 0;
+		memcpy((u8 *)&tre->dword[0], (u8 *)xfer->tx_buf, xfer->len);
+		tre->dword[2] = MSM_GPI_DMA_IMMEDIATE_TRE_DWORD2(xfer->len);
+		tre->dword[3] = MSM_GPI_DMA_IMMEDIATE_TRE_DWORD3(0, 0, is_tx, 0, 0);
+	} else {
+		tre->dword[0] = MSM_GPI_DMA_W_BUFFER_TRE_DWORD0(dma_buf);
+		tre->dword[1] = MSM_GPI_DMA_W_BUFFER_TRE_DWORD1(dma_buf);
+		tre->dword[2] = MSM_GPI_DMA_W_BUFFER_TRE_DWORD2(xfer->len);
+		tre->dword[3] = MSM_GPI_DMA_W_BUFFER_TRE_DWORD3(0, 0, is_tx, 0, 0);
+	}
+
 	return tre;
 }
 
@@ -1354,7 +1366,7 @@ static int spi_gsi_rx_xfer(struct spi_transfer *xfer, struct spi_geni_master *ma
 	struct msm_gpi_tre *rx_tre = NULL;
 
 	rx_tre = &mas->gsi[mas->num_xfers].rx_dma_tre;
-	rx_tre = setup_dma_tre(rx_tre, xfer->rx_dma, xfer->len, mas, 0);
+	rx_tre = setup_dma_tre(rx_tre, xfer, xfer->rx_dma, mas, 0);
 	if (IS_ERR_OR_NULL(rx_tre)) {
 		dev_err(mas->dev, "Error setting up rx tre\n");
 		return PTR_ERR(rx_tre);
@@ -1395,7 +1407,7 @@ static int spi_gsi_tx_xfer(struct spi_transfer *xfer, struct spi_geni_master *ma
 	struct msm_gpi_tre *tx_tre = NULL;
 
 	tx_tre = &mas->gsi[mas->num_xfers].tx_dma_tre;
-	tx_tre = setup_dma_tre(tx_tre, xfer->tx_dma, xfer->len, mas, 1);
+	tx_tre = setup_dma_tre(tx_tre, xfer, xfer->tx_dma, mas, 1);
 	if (IS_ERR_OR_NULL(tx_tre)) {
 		dev_err(mas->dev, "Error setting up tx tre\n");
 		return PTR_ERR(tx_tre);
