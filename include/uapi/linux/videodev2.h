@@ -57,9 +57,7 @@
 #ifndef _UAPI__LINUX_VIDEODEV2_H
 #define _UAPI__LINUX_VIDEODEV2_H
 
-#ifndef __KERNEL__
-#include <sys/time.h>
-#endif
+#include <linux/time.h>
 #include <linux/compiler.h>
 #include <linux/ioctl.h>
 #include <linux/types.h>
