@@ -11,6 +11,11 @@
 #include <linux/types.h>
 
 #define HARDWARE_PROJECT_UNKNOWN    0
+#define HARDWARE_PROJECT_N3         2 // houji
+#define HARDWARE_PROJECT_N11U       3 // manet
+#define HARDWARE_PROJECT_N18        7 // goku
+#define HARDWARE_PROJECT_O81       10 // muyu
+#define HARDWARE_PROJECT_O82       11 // uke
 
 typedef enum {
 	CountryCN = 0x00,
