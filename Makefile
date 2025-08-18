@@ -1224,7 +1224,7 @@ export MODULES_NSDEPS := $(extmod_prefix)modules.nsdeps
 
 PHONY += headers
 
-ext-mod-dir := ../sm8650-modules
+ext-mod-dir := ../sm8635-modules
 ext-mod-dirs := \
  	$(ext-mod-dir)/qcom/opensource/audio-kernel \
  	$(ext-mod-dir)/qcom/opensource/dataipa/drivers/platform/msm \
