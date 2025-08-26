@@ -15,6 +15,7 @@
 #include "wcd-usbss-priv.h"
 #include "wcd-usbss-reg-masks.h"
 #include "wcd-usbss-reg-shifts.h"
+#include "../../misc/hwid/hwid.h"
 
 #define WCD_USBSS_I2C_NAME	"wcd-usbss-i2c-driver"
 
@@ -381,8 +382,8 @@ int wcd_usbss_register_update(uint32_t reg_arr[][2], bool write, size_t arr_size
 
 	for (i = 0; i < arr_size; i++) {
 		if (write) {
-			rc = regmap_write(wcd_usbss_ctxt_->regmap, reg_arr[i][0],
-					  reg_arr[i][1] & reg_mask);
+			rc = regmap_update_bits(wcd_usbss_ctxt_->regmap, reg_arr[i][0], reg_mask,
+						reg_arr[i][1] & reg_mask);
 			if (rc != 0) {
 				dev_err(wcd_usbss_ctxt_->dev,
 					"%s: USB-SS register 0x%x (value of 0x%x) write failed\n",
@@ -742,9 +743,10 @@ static int wcd_usbss_usbc_event_changed(struct notifier_block *nb,
 	if (!dev)
 		return -EINVAL;
 
-	dev_dbg(dev, "%s: USB change event received, supply mode %d, usbc mode %ld, expected %d\n",
+	priv->u_role = ((struct ucsi_glink_constat_info *)ptr)->u_role;
+	dev_info(dev, "%s: USB change event received, supply mode %d, usbc mode %ld, expected %d, usb role %d\n",
 			__func__, acc, priv->usbc_mode.counter,
-			TYPEC_ACCESSORY_AUDIO);
+			TYPEC_ACCESSORY_AUDIO, priv->u_role);
 
 	switch (acc) {
 	case TYPEC_ACCESSORY_AUDIO:
@@ -1134,6 +1136,8 @@ int wcd_usbss_switch_update(enum wcd_usbss_cable_types ctype,
 {
 	int i = 0, ret = 0;
 	bool audio_switch = false;
+	struct device *i2c_bus_dev = NULL;
+	bool disable_rpm = false;
 
 	/* check if driver is probed and private context is init'ed */
 	if (wcd_usbss_ctxt_ == NULL)
@@ -1141,6 +1145,13 @@ int wcd_usbss_switch_update(enum wcd_usbss_cable_types ctype,
 
 	if (!wcd_usbss_ctxt_->regmap)
 		return -EINVAL;
+
+	i2c_bus_dev= wcd_usbss_ctxt_->client->adapter->dev.parent;
+
+	if (!pm_runtime_enabled(i2c_bus_dev)) {
+		pm_runtime_enable(i2c_bus_dev);
+		disable_rpm = true;
+	}
 
 	mutex_lock(&wcd_usbss_ctxt_->switch_update_lock);
 
@@ -1772,8 +1783,8 @@ static int wcd_usbss_probe(struct i2c_client *i2c)
 
 	/* OVP-Fuse settings recommended from HW */
 	regmap_update_bits(priv->regmap, WCD_USBSS_FSM_OVERRIDE, 0x77, 0x77);
-	regmap_update_bits(priv->regmap, WCD_USBSS_DP_EN, 0x0E, 0x08);
-	regmap_update_bits(priv->regmap, WCD_USBSS_DN_EN, 0x0E, 0x08);
+	regmap_update_bits(priv->regmap, WCD_USBSS_DP_EN, 0x0E, 0x0c);
+	regmap_update_bits(priv->regmap, WCD_USBSS_DN_EN, 0x0E, 0x0c);
 
 	/* Display common mode and OVP 4V updates */
 	regmap_update_bits(priv->regmap, WCD_USBSS_DISP_AUXP_CTL, 0x07, 0x01);
