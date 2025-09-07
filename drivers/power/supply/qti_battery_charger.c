@@ -3700,6 +3700,48 @@ static ssize_t charge_control_en_show(struct class *c,
 }
 static CLASS_ATTR_RW(charge_control_en);
 
+static ssize_t fastcharge_enable_store(struct class *c,
+                    struct class_attribute *attr,
+                    const char *buf, size_t count)
+{
+    struct battery_chg_dev *bcdev =
+        container_of(c, struct battery_chg_dev, battery_class);
+    bool enable;
+    u32 cmd;
+    int rc;
+
+    rc = kstrtobool(buf, &enable);
+    if (rc)
+        return -EINVAL;
+
+    cmd = enable ? 0x9 : 0x8;
+    rc = write_property_id(bcdev, &bcdev->psy_list[PSY_TYPE_XM],
+                           XM_PROP_SMART_CHG, cmd);
+    if (rc < 0)
+        return rc;
+
+    return count;
+}
+
+static ssize_t fastcharge_enable_show(struct class *c,
+                    struct class_attribute *attr, char *buf)
+{
+    struct battery_chg_dev *bcdev =
+        container_of(c, struct battery_chg_dev, battery_class);
+    struct psy_state *pst = &bcdev->psy_list[PSY_TYPE_XM];
+    int rc;
+    u32 val;
+
+    rc = read_property_id(bcdev, pst, XM_PROP_SMART_CHG);
+    if (rc < 0)
+        return rc;
+
+    val = pst->prop[XM_PROP_SMART_CHG];
+    return scnprintf(buf, PAGE_SIZE, "%u\n", (val & 0x8) ? 1 : 0);
+}
+
+static CLASS_ATTR_RW(fastcharge_enable);
+
 QTI_CHARGER_RO_SHOW(usb_typec_compliant, PSY_TYPE_USB, USB_TYPEC_COMPLIANT);
 
 QTI_CHARGER_RO_SHOW(usb_num_ports, PSY_TYPE_USB, USB_NUM_PORTS);
@@ -9835,6 +9877,7 @@ static struct attribute *battery_class_attrs[] = {
 #endif
 	&class_attr_cloud_fod.attr,
 	&class_attr_last_node.attr,
+	&class_attr_fastcharge_enable.attr,
 	NULL,
 };
 ATTRIBUTE_GROUPS(battery_class);
@@ -9863,6 +9906,7 @@ static struct attribute *battery_class_usb_2_attrs[] = {
 	&class_attr_usb_typec_compliant.attr,
 	&class_attr_usb_2_typec_compliant.attr,
 	&class_attr_charge_control_en.attr,
+	&class_attr_fastcharge_enable.attr,
 	NULL,
 };
 ATTRIBUTE_GROUPS(battery_class_usb_2);
