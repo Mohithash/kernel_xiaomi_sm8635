@@ -2581,12 +2581,15 @@ static int spi_geni_transfer_one_message(struct spi_controller *spi, struct spi_
 	struct spi_transfer *next_xfer = NULL;
 	struct spi_transfer *xfer_tx_rx = NULL;
 	int ret = 0;
+	bool is_qspi = (mas->proto == GENI_SE_QSPI);
 
 	list_for_each_entry(xfer, &msg->transfers, transfer_list) {
 		mas->is_tx_rx = false;
 		xfer_tx_rx = NULL;
 		mas->dummy_len = 0;
-		if (!list_is_last(&xfer->transfer_list, &msg->transfers)) {
+
+		/* This section applies only to the QSPI protocol, SPI Protocol support is TBD. */
+		if (is_qspi && !list_is_last(&xfer->transfer_list, &msg->transfers)) {
 			next_xfer = list_next_entry(xfer, transfer_list);
 			if (next_xfer->dummy_data) {
 				/*
