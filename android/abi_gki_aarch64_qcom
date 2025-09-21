@@ -2331,6 +2331,7 @@
   pci_dev_put
   pci_disable_device
   pci_disable_msi
+  pci_ecam_create
   pci_ecam_map_bus
   pcie_capability_clear_and_set_word
   pcie_capability_read_dword
@@ -4199,8 +4200,8 @@
   xa_find_after
   __xa_insert
   xa_load
-  xa_store
   xas_load
+  xa_store
   xdp_convert_zc_to_xdp_frame
   xdp_do_flush
   xdp_do_redirect
