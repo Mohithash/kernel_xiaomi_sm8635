@@ -3706,19 +3706,47 @@ static ssize_t fastcharge_enable_store(struct class *c,
 {
     struct battery_chg_dev *bcdev =
         container_of(c, struct battery_chg_dev, battery_class);
-    bool enable;
-    u32 cmd;
+    int mode;
     int rc;
 
-    rc = kstrtobool(buf, &enable);
+    rc = kstrtoint(buf, 10, &mode);
     if (rc)
         return -EINVAL;
 
-    cmd = enable ? 0x9 : 0x8;
-    rc = write_property_id(bcdev, &bcdev->psy_list[PSY_TYPE_XM],
-                           XM_PROP_SMART_CHG, cmd);
-    if (rc < 0)
-        return rc;
+    switch (mode) {
+    case 0:
+        rc = write_property_id(bcdev, &bcdev->psy_list[PSY_TYPE_XM],
+                               XM_PROP_SMART_CHG, 0x8);
+        if (rc < 0)
+            return rc;
+        rc = write_property_id(bcdev, &bcdev->psy_list[PSY_TYPE_XM],
+                               XM_PROP_SPORT_MODE, 0);
+        if (rc < 0)
+            return rc;
+        break;
+    case 1:
+        rc = write_property_id(bcdev, &bcdev->psy_list[PSY_TYPE_XM],
+                               XM_PROP_SMART_CHG, 0x9);
+        if (rc < 0)
+            return rc;
+        rc = write_property_id(bcdev, &bcdev->psy_list[PSY_TYPE_XM],
+                               XM_PROP_SPORT_MODE, 0);
+        if (rc < 0)
+            return rc;
+        break;
+    case 2:
+        rc = write_property_id(bcdev, &bcdev->psy_list[PSY_TYPE_XM],
+                               XM_PROP_SMART_CHG, 0x9);
+        if (rc < 0)
+            return rc;
+        rc = write_property_id(bcdev, &bcdev->psy_list[PSY_TYPE_XM],
+                               XM_PROP_SPORT_MODE, 1);
+        if (rc < 0)
+            return rc;
+        break;
+    default:
+        return -EINVAL;
+    }
 
     return count;
 }
@@ -3730,14 +3758,27 @@ static ssize_t fastcharge_enable_show(struct class *c,
         container_of(c, struct battery_chg_dev, battery_class);
     struct psy_state *pst = &bcdev->psy_list[PSY_TYPE_XM];
     int rc;
-    u32 val;
+    u32 sport_mode, smart_chg;
+    int mode;
+
+    rc = read_property_id(bcdev, pst, XM_PROP_SPORT_MODE);
+    if (rc < 0)
+        return rc;
+    sport_mode = pst->prop[XM_PROP_SPORT_MODE];
 
     rc = read_property_id(bcdev, pst, XM_PROP_SMART_CHG);
     if (rc < 0)
         return rc;
+    smart_chg = pst->prop[XM_PROP_SMART_CHG];
 
-    val = pst->prop[XM_PROP_SMART_CHG];
-    return scnprintf(buf, PAGE_SIZE, "%u\n", (val & 0x8) ? 1 : 0);
+    if (sport_mode == 1 && smart_chg == 8)
+        mode = 2;
+    else if (sport_mode == 0 && (smart_chg == 0x9 || smart_chg == 9))
+        mode = 1;
+    else
+        mode = 0;
+
+    return scnprintf(buf, PAGE_SIZE, "%d\n", mode);
 }
 
 static CLASS_ATTR_RW(fastcharge_enable);
