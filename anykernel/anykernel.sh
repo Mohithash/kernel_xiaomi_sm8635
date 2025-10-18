@@ -4,7 +4,7 @@
 ### AnyKernel setup
 # global properties
 properties() { '
-kernel.string=Chidori-Kernel-v1.0
+kernel.string=Chidori-Kernel
 do.devicecheck=0
 do.modules=0
 do.systemless=0
