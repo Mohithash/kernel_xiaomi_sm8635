@@ -3861,15 +3861,20 @@ static bool dwc3_msm_orientation_gpio_init(struct dwc3_msm *mdwc)
 	int rc;
 
 	mdwc->orientation_gpio = of_get_gpio(dev->of_node, 0);
+	/*
+	 * If the GPIO is not defined or invalid, simply disable the
+	 * orientation feature - this is not an error condition.
+	 */
 	if (!gpio_is_valid(mdwc->orientation_gpio)) {
-		dev_err(dev, "Failed to get gpio\n");
+		dev_dbg(dev, "orientation GPIO not defined, feature disabled\n");
+		mdwc->orientation_gpio = -EINVAL;
 		return false;
 	}
 
 	rc = devm_gpio_request_one(dev, mdwc->orientation_gpio,
 				   GPIOF_IN, "dwc3-msm-orientation");
 	if (rc < 0) {
-		dev_err(dev, "Failed to request gpio\n");
+		dev_err(dev, "failed to request orientation GPIO, ret=%d\n", rc);
 		mdwc->orientation_gpio = -EINVAL;
 		return false;
 	}
