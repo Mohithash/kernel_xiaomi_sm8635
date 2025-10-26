@@ -3773,7 +3773,7 @@ static ssize_t fastcharge_enable_show(struct class *c,
 
     if (sport_mode == 1 && smart_chg == 8)
         mode = 2;
-    else if (sport_mode == 0 && (smart_chg == 0x9 || smart_chg == 9))
+    else if (sport_mode == 0 && smart_chg == 8)
         mode = 1;
     else
         mode = 0;
