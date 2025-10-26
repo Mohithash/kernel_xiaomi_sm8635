@@ -400,6 +400,26 @@ static int devfreq_set_target(struct devfreq *devfreq, unsigned long new_freq,
  * Note: Lock devfreq->lock before calling devfreq_update_target. This function
  *	 should be only used by both update_devfreq() and devfreq governors.
  */
+
+static int eff_target(struct devfreq *df, unsigned long *freq)
+{
+    struct devfreq_dev_status *stat = &df->last_status;
+    unsigned long util = (stat->busy_time * 100) / stat->total_time;
+
+    // Define efficiency bias: prefer mid-level OPPs
+    if (util < 30)
+        *freq = df->scaling_min_freq;
+    else if (util < 70)
+        *freq = (df->scaling_max_freq + df->scaling_min_freq) / 2; // midpoint OPP
+    else
+        *freq = df->scaling_max_freq;
+
+    // Optional: use Energy Model weights for OPP selection
+    dev_pm_opp_find_freq_ceil(df->dev.parent, freq);
+    return 0;
+}
+
+
 int devfreq_update_target(struct devfreq *devfreq, unsigned long freq)
 {
 	unsigned long min_freq, max_freq;
@@ -412,7 +432,7 @@ int devfreq_update_target(struct devfreq *devfreq, unsigned long freq)
 		return -EINVAL;
 
 	/* Reevaluate the proper frequency */
-	err = devfreq->governor->get_target_freq(devfreq, &freq);
+	err = eff_target(devfreq, &freq);
 	if (err)
 		return err;
 	devfreq_get_freq_range(devfreq, &min_freq, &max_freq);
