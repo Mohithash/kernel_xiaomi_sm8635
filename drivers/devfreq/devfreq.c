@@ -432,7 +432,10 @@ int devfreq_update_target(struct devfreq *devfreq, unsigned long freq)
 		return -EINVAL;
 
 	/* Reevaluate the proper frequency */
-	err = eff_target(devfreq, &freq);
+	err = devfreq->governor->get_target_freq(devfreq, &freq);
+	if (err)
+		return err;
+	err = eff_target(devfreq,&freq);
 	if (err)
 		return err;
 	devfreq_get_freq_range(devfreq, &min_freq, &max_freq);
