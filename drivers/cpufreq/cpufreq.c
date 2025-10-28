@@ -532,6 +532,7 @@ void cpufreq_disable_fast_switch(struct cpufreq_policy *policy)
 }
 EXPORT_SYMBOL_GPL(cpufreq_disable_fast_switch);
 
+
 static unsigned int __resolve_freq(struct cpufreq_policy *policy,
 		unsigned int target_freq, unsigned int relation)
 {
@@ -549,6 +550,19 @@ static unsigned int __resolve_freq(struct cpufreq_policy *policy,
 	policy->cached_target_freq = target_freq;
 	return policy->freq_table[idx].frequency;
 }
+unsigned int get_current_frequency(struct cpufreq_policy * policy)
+{
+         unsigned int cur_freq = __cpufreq_get(policy);
+         return cur_freq;
+}
+EXPORT_SYMBOL_GPL(get_current_frequency);
+
+unsigned int get_min_freq(struct cpufreq_policy * policy)
+{
+         unsigned int final_freq_min = __resolve_freq(policy, 0, CPUFREQ_RELATION_L);
+         return final_freq_min;
+}
+EXPORT_SYMBOL_GPL(get_min_freq);
 
 /**
  * cpufreq_driver_resolve_freq - Map a target frequency to a driver-supported
