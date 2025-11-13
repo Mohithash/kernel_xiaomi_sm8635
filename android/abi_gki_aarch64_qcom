@@ -2326,6 +2326,7 @@
   pcie_capability_clear_and_set_word
   pcie_capability_read_dword
   pcie_capability_read_word
+  pcie_get_width_cap
   pci_ecam_create
   pci_ecam_free
   pcie_get_width_cap
