@@ -2346,6 +2346,8 @@
   pci_find_vsec_capability
   pci_flags
   pci_free_irq_vectors
+  pci_generic_config_read
+  pci_generic_config_write
   pci_get_device
   pci_get_domain_bus_and_slot
   pci_host_common_probe
