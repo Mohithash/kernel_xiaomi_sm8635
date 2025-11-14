@@ -233,6 +233,17 @@ config BATTERY_WM97XX
 	help
 	  Say Y to enable support for battery measured by WM97xx aux port.
 
+config BATTERY_MAX1720X
+	tristate "Maxim MAX17201/MAX17215 Fuel Gauge"
+	depends on I2C
+	select REGMAP_I2C
+	help
+	  MAX1720x is fuel-gauge systems for lithium-ion (Li+) batteries
+	  in handheld and portable equipment.
+
+	  Say Y here to enable support for the MAX17201/MAX17335 standalone
+	  battery gas-gauge.
+
 config BATTERY_SBS
 	tristate "SBS Compliant gas gauge"
 	depends on I2C
