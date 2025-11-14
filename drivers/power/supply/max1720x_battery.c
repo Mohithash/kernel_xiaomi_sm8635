@@ -505,6 +505,10 @@ enum register_ids {
 	TEMP4_REG,
 	CHGSTAT_REG,
 	LEAKCURRREP_REG,
+	NVALRTTH_REG,
+	NTALRTTH_REG,
+	NIALRTTH_REG,
+	NSALRTTH_REG,
 	NNVCFG1_REG,
 	NICHGCFG_REG,
 	NICHGCFG1_REG,
@@ -832,6 +836,10 @@ static const u16 max17332_regs[] = {
 	[CHGSTAT_REG] = 0xA3,
 	[TEMP1_REG] = 0x134,
 	[LEAKCURRREP_REG] = 0x16F,
+	[NVALRTTH_REG] = 0x18C,
+	[NTALRTTH_REG] = 0x18D,
+	[NIALRTTH_REG] = 0x18E,
+	[NSALRTTH_REG] = 0x18F,
 	[NRSENSE_REG] = 0x19C,
 	[NVEMPTY_REG] = 0x19E,
 	[NRCOMP0_REG] = 0x1A6,
@@ -5688,30 +5696,87 @@ static irqreturn_t max17330_irq_handler(int id, void *dev)
 	return IRQ_HANDLED;
 }
 
-static void max1720x_set_alert_thresholds(struct max1720x_priv *priv)
+static int max1720x_set_alert_thresholds(struct max1720x_priv *priv)
 {
 	struct max1720x_platform_data *pdata = priv->pdata;
 	u32 val;
+	int ret;
+
+	/*
+	 * According to the MAX17332 datasheet, nVAlrtTh (0x18C) is a "special" register
+	 * that stores the non-volatile voltage alert thresholds:
+	 * - If nNVCfg1.enAT is set, the VAlrtTh (0x001) register is restored from
+	 *	 nVAlrtTh at power-up instead of using the default 0xFF00 (disabled).
+	 * - The upper 8 bits set the maximum threshold, and the lower 8 bits set the
+	 *	 minimum threshold, with 20 mV resolution over the full VCell range.
+	 *
+	 * The corresponding nTAlrtTh, nSAlrtTh, and nIAlrtTh registers behave similarly
+	 * for temperature, SOC, and current alert thresholds.
+	 */
+
+	ret = max1720x_regmap_read(priv, priv->regs[NNVCFG1_REG], &val);
+	if (ret < 0)
+		return ret;
+
+	val |= (1 << 3); /* Set bit 3 (D3, enAT) */
+
+	ret = max1720x_regmap_write(priv, priv->regs[NNVCFG1_REG], val);
+	if (ret < 0)
+		return ret;
 
 	/* Set VAlrtTh */
 	val = (pdata->volt_min / 20);
 	val |= ((pdata->volt_max / 20) << 8);
-	max1720x_regmap_write(priv, priv->regs[VALRTTH_REG], val);
+
+	ret = max1720x_regmap_write(priv, priv->regs[VALRTTH_REG], val);
+	if (ret < 0)
+		return ret;
+
+	/* Set nVAlrtTh (non-volatile) */
+	ret = max1720x_regmap_write(priv, priv->regs[NVALRTTH_REG], val);
+	if (ret < 0)
+		return ret;
 
 	/* Set TAlrtTh */
 	val = pdata->temp_min & 0xFF;
 	val |= ((pdata->temp_max & 0xFF) << 8);
-	max1720x_regmap_write(priv, priv->regs[TALRTTH_REG], val);
+
+	ret = max1720x_regmap_write(priv, priv->regs[TALRTTH_REG], val);
+	if (ret < 0)
+		return ret;
+
+	/* Set nTAlrtTh (non-volatile) */
+	ret = max1720x_regmap_write(priv, priv->regs[NTALRTTH_REG], val);
+	if (ret < 0)
+		return ret;
 
 	/* Set SAlrtTh */
 	val = pdata->soc_min;
 	val |= (pdata->soc_max << 8);
-	max1720x_regmap_write(priv, priv->regs[SALRTTH_REG], val);
+
+	ret = max1720x_regmap_write(priv, priv->regs[SALRTTH_REG], val);
+	if (ret < 0)
+		return ret;
+
+	/*set nSAlrtTh*/
+	ret = max1720x_regmap_write(priv, priv->regs[NSALRTTH_REG], val);
+	if (ret < 0)
+		return ret;
 
 	/* Set IAlrtTh */
 	val = (pdata->curr_min * pdata->rsense / 400) & 0xFF;
 	val |= (((pdata->curr_max * pdata->rsense / 400) & 0xFF) << 8);
-	max1720x_regmap_write(priv, priv->regs[IALRTTH_REG], val);
+
+	ret = max1720x_regmap_write(priv, priv->regs[IALRTTH_REG], val);
+	if (ret < 0)
+		return ret;
+
+	/*Set nIAlrtTh*/
+	ret = max1720x_regmap_write(priv, priv->regs[NIALRTTH_REG], val);
+	if (ret < 0)
+		return ret;
+
+	return 0;
 }
 
 static int max1720x_init(struct max1720x_priv *priv)
