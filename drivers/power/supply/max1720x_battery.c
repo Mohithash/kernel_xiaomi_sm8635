@@ -29,6 +29,7 @@
 #include <linux/kernel.h>
 #include <linux/errno.h>
 #include <linux/bitops.h>
+#include <linux/math.h>
 
 #define DRV_NAME "max1720x"
 
@@ -5290,11 +5291,28 @@ static int max1720x_set_max_capacity_alert_th(struct max1720x_priv *priv,
 	return 0;
 }
 
+static int max1720x_get_capacity_percent(struct max1720x_priv *priv, int *capacity)
+{
+	u32 reg;
+	int ret;
+
+	ret = max1720x_regmap_read(priv, priv->regs[REPSOC_REG], &reg);
+	if (ret < 0)
+		return ret;
+
+	reg >>= 8; /* RepSOC LSB: 1/256 % */
+	*capacity = min(100, DIV_ROUND_CLOSEST(reg * 100, 99));
+
+	return 0;
+}
+
 static int max1720x_get_charging_status(struct max1720x_priv *priv)
 {
 	u32 raw_current, chgstat_val;
 	int current_now_uA;
 	bool charger_present;
+	int soc_capacity;
+
 
 	if (max1720x_regmap_read(priv, priv->regs[CHGSTAT_REG], &chgstat_val) < 0)
 		return POWER_SUPPLY_STATUS_UNKNOWN;
@@ -5309,6 +5327,12 @@ static int max1720x_get_charging_status(struct max1720x_priv *priv)
 
 	/* Convert raw current to microamps */
 	current_now_uA = max1720x_raw_current_to_uamps(priv, sign_extend32(raw_current, 15));
+
+	if (max1720x_get_capacity_percent(priv, &soc_capacity) < 0)
+		return POWER_SUPPLY_STATUS_UNKNOWN;
+
+	if (soc_capacity == 100)
+		return POWER_SUPPLY_STATUS_FULL;
 
 	if (current_now_uA <= 0)
 		return POWER_SUPPLY_STATUS_NOT_CHARGING;
@@ -5380,10 +5404,9 @@ static int max1720x_get_property(struct power_supply *psy,
 		val->intval = max1720x_raw_voltage_to_uvolts(priv, reg);
 		break;
 	case POWER_SUPPLY_PROP_CAPACITY:
-		ret = max1720x_regmap_read(priv, priv->regs[REPSOC_REG], &reg);
+		ret = max1720x_get_capacity_percent(priv, &val->intval);
 		if (ret < 0)
 			return ret;
-		val->intval = reg >> 8; /* RepSOC LSB: 1/256 % */
 		break;
 	case POWER_SUPPLY_PROP_CAPACITY_ALERT_MIN:
 		ret = max1720x_get_min_capacity_alert_th(priv, &val->intval);
