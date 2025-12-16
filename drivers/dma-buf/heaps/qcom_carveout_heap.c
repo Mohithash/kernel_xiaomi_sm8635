@@ -132,7 +132,7 @@ carveout_setup_vmperm(struct carveout_heap *carveout_heap,
 
 	if (!carveout_heap->is_secure) {
 		vmperm = mem_buf_vmperm_alloc(&buffer->sg_table, qcom_sg_release,
-				&buffer->kref);
+				(void *)buffer);
 		return vmperm;
 	}
 
@@ -145,7 +145,7 @@ carveout_setup_vmperm(struct carveout_heap *carveout_heap,
 		return ERR_PTR(ret);
 
 	vmperm = mem_buf_vmperm_alloc_staticvm(&buffer->sg_table, vmids, perms, nr,
-				qcom_sg_release, &buffer->kref);
+				qcom_sg_release, (void *)buffer);
 	kfree(vmids);
 	kfree(perms);
 
