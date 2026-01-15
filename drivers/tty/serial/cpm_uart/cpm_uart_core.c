@@ -1428,10 +1428,7 @@ static int cpm_uart_probe(struct platform_device *ofdev)
 static int cpm_uart_remove(struct platform_device *ofdev)
 {
 	struct uart_cpm_port *pinfo = platform_get_drvdata(ofdev);
-
-	uart_remove_one_port(&cpm_reg, &pinfo->port);
-
-	return 0;
+	return uart_remove_one_port(&cpm_reg, &pinfo->port);
 }
 
 static const struct of_device_id cpm_uart_match[] = {

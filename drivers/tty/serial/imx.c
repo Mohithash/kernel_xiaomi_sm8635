@@ -2523,9 +2523,7 @@ static int imx_uart_remove(struct platform_device *pdev)
 {
 	struct imx_port *sport = platform_get_drvdata(pdev);
 
-	uart_remove_one_port(&imx_uart_uart_driver, &sport->port);
-
-	return 0;
+	return uart_remove_one_port(&imx_uart_uart_driver, &sport->port);
 }
 
 static void imx_uart_restore_context(struct imx_port *sport)

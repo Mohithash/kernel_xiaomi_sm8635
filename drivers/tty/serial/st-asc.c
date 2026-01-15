@@ -834,9 +834,7 @@ static int asc_serial_remove(struct platform_device *pdev)
 {
 	struct uart_port *port = platform_get_drvdata(pdev);
 
-	uart_remove_one_port(&asc_uart_driver, port);
-
-	return 0;
+	return uart_remove_one_port(&asc_uart_driver, port);
 }
 
 #ifdef CONFIG_PM_SLEEP

@@ -686,15 +686,18 @@ static int ulite_assign(struct device *dev, int id, phys_addr_t base, int irq,
  *
  * @dev: pointer to device structure
  */
-static void ulite_release(struct device *dev)
+static int ulite_release(struct device *dev)
 {
 	struct uart_port *port = dev_get_drvdata(dev);
+	int rc = 0;
 
 	if (port) {
-		uart_remove_one_port(&ulite_uart_driver, port);
+		rc = uart_remove_one_port(&ulite_uart_driver, port);
 		dev_set_drvdata(dev, NULL);
 		port->mapbase = 0;
 	}
+
+	return rc;
 }
 
 /**
@@ -888,13 +891,14 @@ static int ulite_remove(struct platform_device *pdev)
 {
 	struct uart_port *port = dev_get_drvdata(&pdev->dev);
 	struct uartlite_data *pdata = port->private_data;
+	int rc;
 
 	clk_disable_unprepare(pdata->clk);
-	ulite_release(&pdev->dev);
+	rc = ulite_release(&pdev->dev);
 	pm_runtime_disable(&pdev->dev);
 	pm_runtime_set_suspended(&pdev->dev);
 	pm_runtime_dont_use_autosuspend(&pdev->dev);
-	return 0;
+	return rc;
 }
 
 /* work with hotplug and coldplug */
