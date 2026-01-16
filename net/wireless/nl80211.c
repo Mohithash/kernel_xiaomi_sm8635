@@ -463,13 +463,13 @@ nl80211_sta_wme_policy[NL80211_STA_WME_MAX + 1] = {
 	[NL80211_STA_WME_MAX_SP] = { .type = NLA_U8 },
 };
 
+static struct netlink_range_validation q_range = {
+	.max = INT_MAX,
+};
+
 static struct netlink_range_validation nl80211_punct_bitmap_range = {
 	.min = 0,
 	.max = 0xffff,
-};
-
-static struct netlink_range_validation q_range = {
-	.max = INT_MAX,
 };
 
 static const struct nla_policy nl80211_policy[NUM_NL80211_ATTR] = {
