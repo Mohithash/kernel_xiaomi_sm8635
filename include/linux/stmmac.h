@@ -222,6 +222,23 @@ struct dwxgmac_addrs {
 	u32 pps_offset;
 };
 
+struct dwmac4_addrs {
+	u32 dma_chan;
+	u32 dma_chan_offset;
+	u32 mtl_chan;
+	u32 mtl_chan_offset;
+	u32 mtl_ets_ctrl;
+	u32 mtl_ets_ctrl_offset;
+	u32 mtl_txq_weight;
+	u32 mtl_txq_weight_offset;
+	u32 mtl_send_slp_cred;
+	u32 mtl_send_slp_cred_offset;
+	u32 mtl_high_cred;
+	u32 mtl_high_cred_offset;
+	u32 mtl_low_cred;
+	u32 mtl_low_cred_offset;
+};
+
 struct plat_stmmacenet_data {
 	u32 snps_id;
 	u32 dev_id;
@@ -336,5 +353,7 @@ struct plat_stmmacenet_data {
 	int board_type;
 	int phy_type;
 	const struct dwxgmac_addrs *dwxgmac_addrs;
+	bool serdes_up_after_phy_linkup;
+	const struct dwmac4_addrs *dwmac4_addrs;
 };
 #endif

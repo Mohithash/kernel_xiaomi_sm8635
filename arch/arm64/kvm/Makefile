@@ -27,6 +27,9 @@ kvm-$(CONFIG_ANDROID_ARM64_WORKAROUND_DMA_BEYOND_POC) += android_erratum_pgtable
 
 kvm-$(CONFIG_TRACING) += hyp_events.o hyp_trace.o
 
+# Work around a false positive Clang 22 -Wuninitialized-const-pointer warning
+CFLAGS_sys_regs.o := $(call cc-disable-warning, uninitialized-const-pointer)
+
 always-y := hyp_constants.h hyp-constants.s
 
 define rule_gen_hyp_constants
