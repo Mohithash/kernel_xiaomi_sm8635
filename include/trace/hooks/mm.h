@@ -83,10 +83,6 @@ DECLARE_HOOK(android_vh_alloc_pages_slowpath,
 DECLARE_HOOK(android_vh_print_slabinfo_header,
 	TP_PROTO(struct seq_file *m),
 	TP_ARGS(m));
-struct slabinfo;
-DECLARE_HOOK(android_vh_cache_show,
-	TP_PROTO(struct seq_file *m, struct slabinfo *sinfo, struct kmem_cache *s),
-	TP_ARGS(m, sinfo, s));
 DECLARE_HOOK(android_vh_read_pages,
 	TP_PROTO(struct readahead_control *ractl),
 	TP_ARGS(ractl));
