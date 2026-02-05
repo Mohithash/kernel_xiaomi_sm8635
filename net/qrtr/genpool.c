@@ -662,16 +662,31 @@ static int qrtr_genpool_reboot_cb(struct notifier_block *nb,
 	cancel_work_sync(&qdev->setup_work);
 
 	spin_lock_irqsave(&qdev->lock, flags);
-	qrtr_genpool_set_state(qdev, LOCAL_STATE_PREPARE_REBOOT);
-	qrtr_genpool_signal_setup(qdev);
+	switch (qdev->state) {
+	case LOCAL_STATE_START:
+		qrtr_genpool_set_state(qdev, LOCAL_STATE_PREPARE_REBOOT);
+		qrtr_genpool_signal_setup(qdev);
 
-	rc = wait_event_lock_irq_timeout(qdev->state_wait,
-					 qdev->state == LOCAL_STATE_REBOOT,
-					 qdev->lock,
-					 STATE_WAIT_TIMEOUT);
-	if (!rc)
-		dev_dbg(qdev->dev, "timedout waiting for reboot state change\n");
-	spin_unlock_irqrestore(&qdev->lock, flags);
+		rc = wait_event_lock_irq_timeout(qdev->state_wait,
+						 qdev->state == LOCAL_STATE_REBOOT,
+						 qdev->lock,
+						 STATE_WAIT_TIMEOUT);
+		if (!rc)
+			dev_dbg(qdev->dev, "timedout waiting for reboot state change\n");
+		fallthrough;
+	case LOCAL_STATE_DEFAULT:
+	case LOCAL_STATE_INIT:
+		qrtr_genpool_set_state(qdev, LOCAL_STATE_REBOOT);
+		spin_unlock_irqrestore(&qdev->lock, flags);
+		break;
+	case LOCAL_STATE_PREPARE_REBOOT:
+	case LOCAL_STATE_REBOOT:
+		spin_unlock_irqrestore(&qdev->lock, flags);
+		return NOTIFY_DONE;
+	default:
+		dev_err(qdev->dev, "Unexpected state %u\n", qdev->state);
+		spin_unlock_irqrestore(&qdev->lock, flags);
+	}
 
 	disable_irq(qdev->irq_xfer);
 
