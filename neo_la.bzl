@@ -205,7 +205,6 @@ neo_la_in_tree_modules = [
     "drivers/virt/gunyah/gh_rm_drv.ko",
     "drivers/virt/gunyah/gh_virt_wdt.ko",
     "drivers/virt/gunyah/gunyah_loader.ko",
-    "drivers/virt/gunyah/gunyah_qcom.ko",
     "kernel/msm_sysstats.ko",
     "kernel/sched/walt/sched-walt.ko",
     "kernel/trace/qcom_ipc_logging.ko",
