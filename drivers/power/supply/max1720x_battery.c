@@ -128,6 +128,7 @@
 #define MAX17330_CHGSTAT_CT BIT(2)
 #define MAX17330_CHGSTAT_CC BIT(1)
 #define MAX17330_CHGSTAT_CV BIT(0)
+#define MAX17330_CHGSTAT_CHG_PRESENT BIT(11)
 
 /* CommStat register bits for MAX17330 */
 #define MAX17330_COMMSTAT_NVERROR BIT(2)
@@ -447,7 +448,7 @@ struct max1720x_priv {
 	u8 nvmem_high_addr;
 	int cycles_reg_lsb_percent;
 	kernel_ulong_t driver_data;
-	int (*get_charging_status)(void);
+	int (*get_charging_status)(struct max1720x_priv *priv);
 	int (*get_battery_health)(struct max1720x_priv *priv, int *health);
 };
 
@@ -5281,6 +5282,32 @@ static int max1720x_set_max_capacity_alert_th(struct max1720x_priv *priv,
 	return 0;
 }
 
+static int max1720x_get_charging_status(struct max1720x_priv *priv)
+{
+	u32 raw_current, chgstat_val;
+	int current_now_uA;
+	bool charger_present;
+
+	if (max1720x_regmap_read(priv, priv->regs[CHGSTAT_REG], &chgstat_val) < 0)
+		return POWER_SUPPLY_STATUS_UNKNOWN;
+
+	charger_present = !!(chgstat_val & MAX17330_CHGSTAT_CHG_PRESENT);
+
+	if (!charger_present)
+		return POWER_SUPPLY_STATUS_DISCHARGING;
+
+	if (max1720x_regmap_read(priv, priv->regs[CURRENT_REG], &raw_current) < 0)
+		return POWER_SUPPLY_STATUS_UNKNOWN;
+
+	/* Convert raw current to microamps */
+	current_now_uA = max1720x_raw_current_to_uamps(priv, sign_extend32(raw_current, 15));
+
+	if (current_now_uA <= 0)
+		return POWER_SUPPLY_STATUS_NOT_CHARGING;
+
+	return POWER_SUPPLY_STATUS_CHARGING;
+}
+
 static int max1720x_get_property(struct power_supply *psy,
 				 enum power_supply_property psp,
 				 union power_supply_propval *val)
@@ -5322,7 +5349,7 @@ static int max1720x_get_property(struct power_supply *psy,
 		break;
 	case POWER_SUPPLY_PROP_STATUS:
 		if (pdata && priv->get_charging_status)
-			val->intval = priv->get_charging_status();
+			val->intval = priv->get_charging_status(priv);
 		else
 			val->intval = POWER_SUPPLY_STATUS_UNKNOWN;
 		break;
@@ -5953,6 +5980,7 @@ static int max1720x_probe(struct i2c_client *client, const struct i2c_device_id 
 	priv->get_battery_health = get_battery_health_handlers[id->driver_data];
 	register_to_read = 0x180; /* First register of nvm */
 	priv->driver_data = id->driver_data;
+	priv->get_charging_status = max1720x_get_charging_status;
 
 	if (client->dev.of_node)
 		priv->pdata = max1720x_parse_dt(&client->dev);
