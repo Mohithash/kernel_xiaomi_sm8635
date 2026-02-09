@@ -5919,6 +5919,7 @@ static const struct regmap_config max1720x_regmap = {
 	.reg_bits = 8,
 	.val_bits = 16,
 	.val_format_endian = REGMAP_ENDIAN_NATIVE,
+	.max_register = 0x1FD,
 };
 
 static const struct power_supply_desc max1720x_fg_desc = {
