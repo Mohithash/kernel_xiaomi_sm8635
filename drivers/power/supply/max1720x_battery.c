@@ -6154,7 +6154,7 @@ err_attr:
 	return ret;
 }
 
-static int max1720x_remove(struct i2c_client *client)
+static void max1720x_remove(struct i2c_client *client)
 {
 	struct max1720x_priv *priv = i2c_get_clientdata(client);
 
@@ -6162,7 +6162,6 @@ static int max1720x_remove(struct i2c_client *client)
 	sysfs_remove_group(&priv->dev->kobj, priv->attr_grp);
 	power_supply_unregister(priv->battery);
 
-	return 0;
 }
 
 #ifdef CONFIG_PM_SLEEP
