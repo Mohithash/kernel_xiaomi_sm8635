@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2025 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #ifndef __SI_CORE_H__
@@ -59,6 +59,15 @@ void __fetch__async_reqs(struct si_object_invoke_ctx *oic);
 
 #define align_offset(o) PTR_ALIGN((o), INVOKE_MESSAGE_ALIGN_BYTES)
 
+#if IS_ENABLED(CONFIG_QSEECOM_PROXY)
+enum qseecom_qceos_cmd_status {
+	QSEOS_RESULT_SUCCESS = 0,
+	QSEOS_RESULT_INCOMPLETE,
+	QSEOS_RESULT_BLOCKED_ON_LISTENER,
+	QSEOS_RESULT_CBACK_REQUEST,
+	QSEOS_RESULT_FAILURE  = 0xFFFFFFFF
+};
+#endif
 /* Definitions from QTEE as part of the transport protocol. */
 
 union qtee_smcinvoke_msg_arg {
