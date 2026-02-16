@@ -123,6 +123,7 @@ def define_seraph():
         "drivers/soc/qcom/cmd-db.ko",
         "drivers/soc/qcom/core_hang_detect.ko",
         "drivers/soc/qcom/cpucp_log.ko",
+        "drivers/soc/qcom/crm-v2.ko",
         "drivers/soc/qcom/crypto-qti.ko",
         "drivers/soc/qcom/dcc_v2.ko",
         "drivers/soc/qcom/dcvs/bwmon.ko",
