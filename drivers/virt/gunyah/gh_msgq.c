@@ -238,8 +238,16 @@ int gh_msgq_recv(void *msgq_client_desc,
 			return -EAGAIN;
 
 		if (wait_event_interruptible(cap_table_entry->rx_wq,
-					!cap_table_entry->rx_empty))
+					(!cap_table_entry->rx_empty ||
+					(client_desc->oneshot &&
+					cap_table_entry->rx_cap_id == GH_CAPID_INVAL))))
 			return -ERESTARTSYS;
+
+		if (client_desc->oneshot && cap_table_entry->rx_cap_id == GH_CAPID_INVAL) {
+			pr_info("GH_MSGQ: oneshot label=%u abort RX\n",
+					client_desc->label);
+			return -ENODEV;
+		}
 
 		ret = __gh_msgq_recv(cap_table_entry, buff, buff_size,
 					recv_size, flags);
@@ -367,8 +375,17 @@ int gh_msgq_send(void *msgq_client_desc,
 			return -EAGAIN;
 
 		if (wait_event_interruptible(cap_table_entry->tx_wq,
-					!cap_table_entry->tx_full))
+					(!cap_table_entry->tx_full ||
+					(client_desc->oneshot &&
+					cap_table_entry->tx_cap_id == GH_CAPID_INVAL))))
 			return -ERESTARTSYS;
+
+
+		if (client_desc->oneshot && cap_table_entry->tx_cap_id == GH_CAPID_INVAL) {
+			pr_info("GH_MSGQ: oneshot label=%u abort TX\n",
+					client_desc->label);
+			return -ENODEV;
+		}
 
 		ret = __gh_msgq_send(cap_table_entry, buff, size, flags);
 	} while (ret == -EAGAIN);
@@ -536,6 +553,7 @@ int gh_msgq_populate_cap_info(int label, u64 cap_id, int direction, int irq)
 		spin_lock(&cap_table_entry->cap_entry_lock);
 		cap_table_entry->tx_cap_id = cap_id;
 		cap_table_entry->tx_irq = irq;
+		cap_table_entry->tx_full = false;
 		spin_unlock(&cap_table_entry->cap_entry_lock);
 
 		wake_up_interruptible(&cap_table_entry->tx_wq);
@@ -548,6 +566,7 @@ int gh_msgq_populate_cap_info(int label, u64 cap_id, int direction, int irq)
 		spin_lock(&cap_table_entry->cap_entry_lock);
 		cap_table_entry->rx_cap_id = cap_id;
 		cap_table_entry->rx_irq = irq;
+		cap_table_entry->rx_empty = true;
 		spin_unlock(&cap_table_entry->cap_entry_lock);
 
 		wake_up_interruptible(&cap_table_entry->rx_wq);
@@ -663,6 +682,35 @@ static void gh_msgq_cleanup(void)
 	}
 	spin_unlock(&gh_msgq_cap_list_lock);
 }
+
+void gh_msgq_vm_exit_notify(gh_vmid_t vmid, int vm_exit_type)
+{
+	struct gh_msgq_cap_table *entry;
+
+	/*
+	 * Currently there is just one oneshot client meant for
+	 * TUIVM. When multiple VMs has support for oneshot mode,
+	 * vmid will be used.
+	 */
+	spin_lock(&gh_msgq_cap_list_lock);
+	list_for_each_entry(entry, &gh_msgq_cap_list, entry) {
+		if (!entry->client_desc || !entry->client_desc->oneshot)
+			continue;
+		pr_info("GH_MSGQ: oneshot label=%u unblock IO\n",
+			entry->client_desc->label);
+		/*
+		 * For the oneshot mode, make sure that they are unblocked
+		 * right away from tx/rx wait and fail any further IO until
+		 * the VM is ready again.
+		 */
+		entry->rx_cap_id = GH_CAPID_INVAL;
+		entry->tx_cap_id = GH_CAPID_INVAL;
+		wake_up_all(&entry->tx_wq);
+		wake_up_all(&entry->rx_wq);
+	}
+	spin_unlock(&gh_msgq_cap_list_lock);
+}
+EXPORT_SYMBOL_GPL(gh_msgq_vm_exit_notify);
 
 static int __init ghd_msgq_init(void)
 {
