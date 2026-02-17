@@ -273,6 +273,29 @@ static unsigned int top_load[CLUSTER_MAX];
 static unsigned int curr_cap[CLUSTER_MAX];
 static atomic_t game_status_pid;
 static bool ready_for_freq_updates;
+static int touchboost = 1;
+
+static int set_touchboost(const char *buf, const struct kernel_param *kp)
+{
+	int val;
+
+	if (sscanf(buf, "%d\n", &val) != 1)
+		return -EINVAL;
+
+	touchboost = val;
+	return 0;
+}
+
+static int get_touchboost(char *buf, const struct kernel_param *kp)
+{
+	return snprintf(buf, PAGE_SIZE, "%d", touchboost);
+}
+
+static const struct kernel_param_ops param_ops_touchboost = {
+	.set = set_touchboost,
+	.get = get_touchboost,
+};
+device_param_cb(touchboost, &param_ops_touchboost, NULL, 0644);
 
 #ifdef CONFIG_KPROFILES
 /*
@@ -436,6 +459,7 @@ static ssize_t set_cpu_min_freq(struct kobject *kobj,
 	int i, ntokens = 0;
 	unsigned int val, cpu;
 	const char *cp = buf;
+	const char *reset = "0:0 2:0";
 	struct cpu_status *i_cpu_stats;
 	struct freq_qos_request *req;
 	int ret = 0;
@@ -453,6 +477,9 @@ static ssize_t set_cpu_min_freq(struct kobject *kobj,
 	}
 	mutex_unlock(&freq_pmqos_lock);
 
+	if (!touchboost)
+		cp = reset;
+
 	while ((cp = strpbrk(cp + 1, " :")))
 		ntokens++;
 
@@ -460,7 +487,10 @@ static ssize_t set_cpu_min_freq(struct kobject *kobj,
 	if (!(ntokens % 2))
 		return -EINVAL;
 
-	cp = buf;
+	if (!touchboost)
+		cp = reset;
+	else
+		cp = buf;
 	cpumask_clear(limit_mask_min);
 	for (i = 0; i < ntokens; i += 2) {
 		if (sscanf(cp, "%u:%u", &cpu, &val) != 2)
@@ -520,6 +550,7 @@ static ssize_t set_cpu_max_freq(struct kobject *kobj,
 	int i, ntokens = 0;
 	unsigned int val, cpu;
 	const char *cp = buf;
+	const char *reset = "0:0 2:0";
 	struct cpu_status *i_cpu_stats;
 	struct freq_qos_request *req;
 	int ret = 0;
@@ -537,6 +568,9 @@ static ssize_t set_cpu_max_freq(struct kobject *kobj,
 	}
 	mutex_unlock(&freq_pmqos_lock);
 
+	if (!touchboost)
+		cp = reset;
+
 	while ((cp = strpbrk(cp + 1, " :")))
 		ntokens++;
 
@@ -544,7 +578,10 @@ static ssize_t set_cpu_max_freq(struct kobject *kobj,
 	if (!(ntokens % 2))
 		return -EINVAL;
 
-	cp = buf;
+	if (!touchboost)
+		cp = reset;
+	else
+		cp = buf;
 	cpumask_clear(limit_mask_max);
 	for (i = 0; i < ntokens; i += 2) {
 		if (sscanf(cp, "%u:%u", &cpu, &val) != 2)
