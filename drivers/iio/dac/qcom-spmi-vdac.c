@@ -410,6 +410,8 @@ static int qcom_spmi_vdac_probe(struct platform_device *pdev)
 	indio_dev->channels = vdac_channels;
 	indio_dev->num_channels = ARRAY_SIZE(vdac_channels);
 
+	platform_set_drvdata(pdev, indio_dev);
+
 	ret = devm_iio_device_register(dev, indio_dev);
 	if (ret != 0) {
 		dev_err(&pdev->dev, "Failed to register IIO device\n");
