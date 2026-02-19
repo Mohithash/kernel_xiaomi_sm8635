@@ -75,6 +75,7 @@ EXPORT_SYMBOL_GPL(power_state_enter_into_hibernate);
 
 struct adsp_data {
 	int crash_reason_smem;
+	int crash_reason_stack;
 	const char *firmware_name;
 	const char *dtb_firmware_name;
 	int pas_id;
@@ -136,6 +137,7 @@ struct qcom_adsp {
 	bool retry_shutdown;
 	struct icc_path *bus_client;
 	int crash_reason_smem;
+	int crash_reason_stack;
 	unsigned int smem_host_id;
 	bool has_aggre2_clk;
 	bool dma_phys_below_32b;
@@ -1912,7 +1914,7 @@ static int adsp_probe(struct platform_device *pdev)
 	}
 
 	ret = qcom_q6v5_init(&adsp->q6v5, pdev, rproc, desc->crash_reason_smem,
-			     desc->early_boot, qcom_pas_handover);
+		desc->crash_reason_stack, desc->smem_host_id, desc->early_boot, qcom_pas_handover);
 
 	if (ret)
 		goto detach_proxy_pds;
@@ -2631,6 +2633,8 @@ static const struct adsp_data neo_adsp_resource = {
 	.sysmon_name = "adsp",
 	.qmp_name = "adsp",
 	.ssctl_id = 0x14,
+	.crash_reason_stack = 660,
+	.smem_host_id = 2,
 };
 
 static const struct adsp_data neo_cdsp_resource = {
@@ -2646,6 +2650,8 @@ static const struct adsp_data neo_cdsp_resource = {
 	.sysmon_name = "cdsp",
 	.qmp_name = "cdsp",
 	.ssctl_id = 0x17,
+	.crash_reason_stack = 660,
+	.smem_host_id = 5,
 };
 
 static const struct adsp_data khaje_cdsp_resource = {
