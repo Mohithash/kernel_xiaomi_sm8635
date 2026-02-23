@@ -27,6 +27,13 @@ extern int kp_notifier_unregister_client(struct notifier_block *nb);
 #define RETRY_DELAY msecs_to_jiffies(1000)
 #define DEVFREQ_CDEV_NAME "gpu"
 #define DEVFREQ_CDEV "qcom-devfreq-cdev"
+/*
+ * Reduce aggressive mid-level GPU throttling to preserve frame pacing, while
+ * leaving the last critical states unmodified for thermal safety.
+ */
+#define DEVFREQ_SOFT_THROTTLE_START_STATE 1
+#define DEVFREQ_SOFT_THROTTLE_DIVIDER 2
+#define DEVFREQ_CRITICAL_TAIL_STATES 2
 
 struct devfreq_cdev_device {
 	struct device_node *np;
@@ -81,6 +88,29 @@ static int devfreq_cdev_kp_notifier_cb(struct notifier_block *nb,
 	return NOTIFY_OK;
 }
 #endif /* CONFIG_KPROFILES */
+static unsigned long devfreq_cdev_map_state(struct devfreq_cdev_device *cdev_data,
+					    unsigned long state)
+{
+	unsigned long max_state = cdev_data->max_state;
+	unsigned long critical_first;
+	unsigned long mapped;
+
+	if (state <= DEVFREQ_SOFT_THROTTLE_START_STATE)
+		return state;
+
+	if ((max_state + 1) <= DEVFREQ_CRITICAL_TAIL_STATES)
+		return state;
+
+	critical_first = max_state - DEVFREQ_CRITICAL_TAIL_STATES + 1;
+	if (state >= critical_first)
+		return state;
+
+	mapped = DEVFREQ_SOFT_THROTTLE_START_STATE +
+		DIV_ROUND_UP(state - DEVFREQ_SOFT_THROTTLE_START_STATE,
+			     DEVFREQ_SOFT_THROTTLE_DIVIDER);
+
+	return min(mapped, critical_first - 1);
+}
 
 static int devfreq_cdev_set_state(struct thermal_cooling_device *cdev,
 					unsigned long state)
@@ -88,6 +118,7 @@ static int devfreq_cdev_set_state(struct thermal_cooling_device *cdev,
 	struct devfreq_cdev_device *cdev_data = cdev->devdata;
 	int ret = 0;
 	unsigned long freq;
+	unsigned long req_state = state;
 
 #ifdef CONFIG_KPROFILES
 	/*
@@ -100,10 +131,12 @@ static int devfreq_cdev_set_state(struct thermal_cooling_device *cdev,
 
 	if (state > cdev_data->max_state)
 		return -EINVAL;
+	state = devfreq_cdev_map_state(cdev_data, state);
 	if (state == cdev_data->cur_state)
 		return 0;
 	freq = cdev_data->freq_table[state];
-	pr_debug("cdev:%s Limit:%lu\n", cdev->type, freq);
+	pr_debug("cdev:%s req_state:%lu mapped_state:%lu limit:%lu\n",
+		 cdev->type, req_state, state, freq);
 	ret = dev_pm_qos_update_request(&cdev_data->qos_max_freq_req, freq);
 	if (ret < 0) {
 		pr_err("Error placing qos request:%u. cdev:%s err:%d\n",

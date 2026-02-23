@@ -18,6 +18,14 @@
 
 #define CPUFREQ_CDEV_NAME "cpu%d"
 #define CPUFREQ_CDEV "qcom-cpufreq-cdev"
+/*
+ * Use a gentler throttle curve for the lower/mid thermal states so performance
+ * does not collapse on short heat spikes. The most restrictive states still
+ * map 1:1 to keep hard thermal protection intact.
+ */
+#define CPUFREQ_SOFT_THROTTLE_START_STATE 2
+#define CPUFREQ_SOFT_THROTTLE_DIVIDER 2
+#define CPUFREQ_CRITICAL_TAIL_STATES 3
 
 struct cpufreq_cdev_device {
 	struct list_head node;
@@ -43,21 +51,47 @@ static unsigned int state_to_cpufreq(struct cpufreq_cdev_device *cdev_data,
 			cdev_data->freq_table[state] : UINT_MAX;
 }
 
+static unsigned long cpufreq_cdev_map_state(struct cpufreq_cdev_device *cdev_data,
+					    unsigned long state)
+{
+	unsigned long critical_first;
+	unsigned long mapped;
+
+	if (state <= CPUFREQ_SOFT_THROTTLE_START_STATE)
+		return state;
+
+	if ((cdev_data->max_state + 1) <= CPUFREQ_CRITICAL_TAIL_STATES)
+		return state;
+
+	critical_first = cdev_data->max_state - CPUFREQ_CRITICAL_TAIL_STATES + 1;
+	if (state >= critical_first)
+		return state;
+
+	mapped = CPUFREQ_SOFT_THROTTLE_START_STATE +
+		DIV_ROUND_UP(state - CPUFREQ_SOFT_THROTTLE_START_STATE,
+			     CPUFREQ_SOFT_THROTTLE_DIVIDER);
+
+	return min(mapped, critical_first - 1);
+}
+
 static int cpufreq_cdev_set_state(struct thermal_cooling_device *cdev,
 					unsigned long state)
 {
 	struct cpufreq_cdev_device *cdev_data = cdev->devdata;
 	int ret = 0;
 	unsigned int freq;
+	unsigned long req_state = state;
 
 	if (state > cdev_data->max_state)
 		return -EINVAL;
+	state = cpufreq_cdev_map_state(cdev_data, state);
 	if (state == cdev_data->cur_state)
 		return 0;
 
 	if (freq_qos_request_active(&cdev_data->qos_max_freq_req)) {
 		freq = state_to_cpufreq(cdev_data, state);
-		pr_debug("cdev:%s Limit:%u\n", cdev->type, freq);
+		pr_debug("cdev:%s req_state:%lu mapped_state:%lu limit:%u\n",
+			 cdev->type, req_state, state, freq);
 		ret = freq_qos_update_request(&cdev_data->qos_max_freq_req,
 						freq);
 		if (ret < 0) {
