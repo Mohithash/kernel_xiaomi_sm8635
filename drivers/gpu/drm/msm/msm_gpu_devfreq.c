@@ -10,7 +10,40 @@
 #include <linux/devfreq.h>
 #include <linux/devfreq_cooling.h>
 #include <linux/math64.h>
+#include <linux/pm_qos.h>
 #include <linux/units.h>
+
+#ifdef CONFIG_KPROFILES
+extern unsigned int KP_MODE_CHANGE;
+extern int kp_active_mode(void);
+extern int kp_notifier_register_client(struct notifier_block *nb);
+extern int kp_notifier_unregister_client(struct notifier_block *nb);
+
+/* Cap GPU to 500 MHz in battery kprofile mode (PM QoS uses KHz) */
+#define GPU_BATTERY_MAX_FREQ_KHZ	500000
+
+static int msm_devfreq_kp_notifier_cb(struct notifier_block *nb,
+				      unsigned long action, void *data)
+{
+	struct msm_gpu_devfreq *df =
+		container_of(nb, struct msm_gpu_devfreq, kp_nb);
+	unsigned int mode;
+
+	if (action != KP_MODE_CHANGE)
+		return NOTIFY_DONE;
+
+	mode = (unsigned int)(uintptr_t)data;
+
+	if (mode == 1) /* Battery: cap GPU to 500 MHz */
+		dev_pm_qos_update_request(&df->max_freq,
+					  GPU_BATTERY_MAX_FREQ_KHZ);
+	else /* All other modes: remove cap */
+		dev_pm_qos_update_request(&df->max_freq,
+					  PM_QOS_MAX_FREQUENCY_DEFAULT_VALUE);
+
+	return NOTIFY_OK;
+}
+#endif /* CONFIG_KPROFILES */
 
 /*
  * Power Management:
@@ -156,6 +189,24 @@ void msm_devfreq_init(struct msm_gpu *gpu)
 		return;
 	}
 
+	ret = dev_pm_qos_add_request(&gpu->pdev->dev, &df->max_freq,
+				     DEV_PM_QOS_MAX_FREQUENCY,
+				     PM_QOS_MAX_FREQUENCY_DEFAULT_VALUE);
+	if (ret < 0) {
+		DRM_DEV_ERROR(&gpu->pdev->dev,
+			      "Couldn't initialize max freq QoS\n");
+		dev_pm_qos_remove_request(&df->boost_freq);
+		return;
+	}
+
+#ifdef CONFIG_KPROFILES
+	df->kp_nb.notifier_call = msm_devfreq_kp_notifier_cb;
+	kp_notifier_register_client(&df->kp_nb);
+	/* Apply initial profile state */
+	msm_devfreq_kp_notifier_cb(&df->kp_nb, KP_MODE_CHANGE,
+				   (void *)(uintptr_t)kp_active_mode());
+#endif
+
 	msm_devfreq_profile.initial_freq = gpu->fast_rate;
 
 	/*
@@ -173,6 +224,10 @@ void msm_devfreq_init(struct msm_gpu *gpu)
 
 	if (IS_ERR(df->devfreq)) {
 		DRM_DEV_ERROR(&gpu->pdev->dev, "Couldn't initialize GPU devfreq\n");
+#ifdef CONFIG_KPROFILES
+		kp_notifier_unregister_client(&df->kp_nb);
+#endif
+		dev_pm_qos_remove_request(&df->max_freq);
 		dev_pm_qos_remove_request(&df->boost_freq);
 		df->devfreq = NULL;
 		return;
@@ -212,7 +267,12 @@ void msm_devfreq_cleanup(struct msm_gpu *gpu)
 	if (!has_devfreq(gpu))
 		return;
 
+#ifdef CONFIG_KPROFILES
+	kp_notifier_unregister_client(&df->kp_nb);
+#endif
+
 	devfreq_cooling_unregister(gpu->cooling);
+	dev_pm_qos_remove_request(&df->max_freq);
 	dev_pm_qos_remove_request(&df->boost_freq);
 }
 

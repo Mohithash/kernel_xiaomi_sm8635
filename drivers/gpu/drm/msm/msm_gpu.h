@@ -128,6 +128,19 @@ struct msm_gpu_devfreq {
 	struct dev_pm_qos_request boost_freq;
 
 	/**
+	 * max_freq:
+	 *
+	 * A PM QoS constraint to cap max GPU frequency. Used by
+	 * kprofiles to limit GPU frequency in battery mode.
+	 */
+	struct dev_pm_qos_request max_freq;
+
+#ifdef CONFIG_KPROFILES
+	/** kp_nb: kprofiles notifier for profile-based GPU freq limiting */
+	struct notifier_block kp_nb;
+#endif
+
+	/**
 	 * busy_cycles: Last busy counter value, for calculating elapsed busy
 	 * cycles since last sampling period.
 	 */
