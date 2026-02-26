@@ -222,13 +222,38 @@ static int qcom_usb_extcon_suspend(struct device *dev)
 static int qcom_usb_extcon_resume(struct device *dev)
 {
 	struct qcom_usb_extcon_info *info = dev_get_drvdata(dev);
-	int ret = 0;
+	int ret = 0, vbus_ret = 0, id_ret = 0;
+	bool id_state = false, vbus_state = false;
+	bool needs_detection = false;
 
 	if (device_may_wakeup(dev)) {
 		if (info->id_irq > 0)
 			ret = disable_irq_wake(info->id_irq);
 		if (info->vbus_irq > 0)
 			ret = disable_irq_wake(info->vbus_irq);
+	}
+
+	if (info->vbus_irq > 0) {
+		vbus_ret = irq_get_irqchip_state(info->vbus_irq,
+				IRQCHIP_STATE_LINE_LEVEL, &vbus_state);
+		if (vbus_ret == 0 && extcon_get_state(info->edev, EXTCON_USB) != vbus_state)
+			needs_detection = true;
+		else if (vbus_ret != 0)
+			dev_warn(dev, "failed to get VBUS IRQ state: %d\n", vbus_ret);
+	}
+
+	if (info->id_irq > 0) {
+		id_ret = irq_get_irqchip_state(info->id_irq,
+				IRQCHIP_STATE_LINE_LEVEL, &id_state);
+		if (id_ret == 0 && extcon_get_state(info->edev, EXTCON_USB_HOST) != !id_state)
+			needs_detection = true;
+		else if (id_ret != 0)
+			dev_warn(dev, "failed to get ID IRQ state: %d\n", id_ret);
+	}
+
+	if (needs_detection) {
+		cancel_delayed_work_sync(&info->wq_detcable);
+		qcom_usb_extcon_detect_cable(&info->wq_detcable.work);
 	}
 
 	return ret;
