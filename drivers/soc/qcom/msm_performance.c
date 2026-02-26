@@ -37,6 +37,13 @@
 #include <linux/scmi_plh.h>
 #endif
 
+#ifdef CONFIG_KPROFILES
+extern unsigned int KP_MODE_CHANGE;
+extern int kp_active_mode(void);
+extern int kp_notifier_register_client(struct notifier_block *nb);
+extern int kp_notifier_unregister_client(struct notifier_block *nb);
+#endif
+
 #define POLL_INT 25
 #define NODE_NAME_MAX_CHARS 16
 
@@ -266,6 +273,102 @@ static unsigned int top_load[CLUSTER_MAX];
 static unsigned int curr_cap[CLUSTER_MAX];
 static atomic_t game_status_pid;
 static bool ready_for_freq_updates;
+
+#ifdef CONFIG_KPROFILES
+/*
+ * Battery mode frequency limits for peridot (SM8635):
+ *   CPU 0-2: little (Cortex-A510) → medium cap
+ *   CPU 3-6: big   (Cortex-A720) → medium cap
+ *   CPU 7:   prime (Cortex-X4)   → cpuinfo.min_freq (force minimum)
+ */
+static const unsigned int msm_perf_battery_max_freq[] = {
+	1593600, /* CPU0 - little */
+	1593600, /* CPU1 - little */
+	1593600, /* CPU2 - little */
+	1286400, /* CPU3 - big */
+	1286400, /* CPU4 - big */
+	1286400, /* CPU5 - big */
+	1286400, /* CPU6 - big */
+	0,       /* CPU7 - prime: use cpuinfo.min_freq (resolved at runtime) */
+};
+
+static void msm_perf_apply_battery_limits(void)
+{
+	unsigned int cpu;
+	struct freq_qos_request *req;
+	struct cpufreq_policy *policy;
+	unsigned int freq;
+
+	if (!ready_for_freq_updates)
+		return;
+
+	for_each_present_cpu(cpu) {
+		req = &per_cpu(qos_req_max, cpu);
+		if (!freq_qos_request_active(req))
+			continue;
+
+		if (cpu < ARRAY_SIZE(msm_perf_battery_max_freq) &&
+		    msm_perf_battery_max_freq[cpu] > 0) {
+			freq = msm_perf_battery_max_freq[cpu];
+		} else {
+			/* Prime: cap to hardware minimum to force lowest OPP */
+			policy = cpufreq_cpu_get(cpu);
+			if (!policy)
+				continue;
+			freq = policy->cpuinfo.min_freq;
+			cpufreq_cpu_put(policy);
+		}
+
+		freq_qos_update_request(req, freq);
+	}
+}
+
+static void msm_perf_clear_battery_limits(void)
+{
+	unsigned int cpu;
+	struct freq_qos_request *req;
+
+	if (!ready_for_freq_updates)
+		return;
+
+	for_each_present_cpu(cpu) {
+		req = &per_cpu(qos_req_max, cpu);
+		if (!freq_qos_request_active(req))
+			continue;
+		freq_qos_update_request(req, FREQ_QOS_MAX_DEFAULT_VALUE);
+	}
+}
+
+static int msm_perf_kp_notifier_cb(struct notifier_block *nb,
+				   unsigned long action, void *data)
+{
+	unsigned int mode;
+
+	if (action != KP_MODE_CHANGE)
+		return NOTIFY_DONE;
+
+	mode = (unsigned int)(uintptr_t)data;
+
+	switch (mode) {
+	case 3: /* Performance: remove frequency caps (boost is hardware-controlled on SM8635) */
+		msm_perf_clear_battery_limits();
+		break;
+	case 1: /* Battery: cap little/big, pin prime to min */
+		msm_perf_apply_battery_limits();
+		break;
+	case 2: /* Balanced: remove any battery caps */
+	default:
+		msm_perf_clear_battery_limits();
+		break;
+	}
+
+	return NOTIFY_OK;
+}
+
+static struct notifier_block msm_perf_kp_nb = {
+	.notifier_call = msm_perf_kp_notifier_cb,
+};
+#endif /* CONFIG_KPROFILES */
 
 static int freq_qos_request_init(void)
 {
@@ -1557,6 +1660,13 @@ static int __init msm_performance_init(void)
 	cpus_read_unlock();
 
 	platform_driver_register(&scmi_plh_driver);
+
+#ifdef CONFIG_KPROFILES
+	kp_notifier_register_client(&msm_perf_kp_nb);
+	/* Apply initial profile state at boot */
+	msm_perf_kp_notifier_cb(NULL, KP_MODE_CHANGE,
+				 (void *)(uintptr_t)kp_active_mode());
+#endif
 
 	return 0;
 }
