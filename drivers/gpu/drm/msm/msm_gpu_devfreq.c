@@ -27,6 +27,7 @@ static int msm_devfreq_kp_notifier_cb(struct notifier_block *nb,
 {
 	struct msm_gpu_devfreq *df =
 		container_of(nb, struct msm_gpu_devfreq, kp_nb);
+	struct msm_gpu *gpu = container_of(df, struct msm_gpu, devfreq);
 	unsigned int mode;
 
 	if (action != KP_MODE_CHANGE)
@@ -40,6 +41,12 @@ static int msm_devfreq_kp_notifier_cb(struct notifier_block *nb,
 	else /* All other modes: remove cap */
 		dev_pm_qos_update_request(&df->max_freq,
 					  PM_QOS_MAX_FREQUENCY_DEFAULT_VALUE);
+
+	if (mode == 3) /* Performance: lock GPU to max OPP via min freq floor */
+		dev_pm_qos_update_request(&df->kp_perf_freq,
+					  gpu->fast_rate / HZ_PER_KHZ);
+	else /* All other modes: release min freq floor */
+		dev_pm_qos_update_request(&df->kp_perf_freq, 0);
 
 	return NOTIFY_OK;
 }
@@ -200,6 +207,16 @@ void msm_devfreq_init(struct msm_gpu *gpu)
 	}
 
 #ifdef CONFIG_KPROFILES
+	ret = dev_pm_qos_add_request(&gpu->pdev->dev, &df->kp_perf_freq,
+				     DEV_PM_QOS_MIN_FREQUENCY, 0);
+	if (ret < 0) {
+		DRM_DEV_ERROR(&gpu->pdev->dev,
+			      "Couldn't initialize perf lock freq QoS\n");
+		dev_pm_qos_remove_request(&df->max_freq);
+		dev_pm_qos_remove_request(&df->boost_freq);
+		return;
+	}
+
 	df->kp_nb.notifier_call = msm_devfreq_kp_notifier_cb;
 	kp_notifier_register_client(&df->kp_nb);
 	/* Apply initial profile state */
@@ -226,6 +243,7 @@ void msm_devfreq_init(struct msm_gpu *gpu)
 		DRM_DEV_ERROR(&gpu->pdev->dev, "Couldn't initialize GPU devfreq\n");
 #ifdef CONFIG_KPROFILES
 		kp_notifier_unregister_client(&df->kp_nb);
+		dev_pm_qos_remove_request(&df->kp_perf_freq);
 #endif
 		dev_pm_qos_remove_request(&df->max_freq);
 		dev_pm_qos_remove_request(&df->boost_freq);
@@ -273,6 +291,9 @@ void msm_devfreq_cleanup(struct msm_gpu *gpu)
 
 	devfreq_cooling_unregister(gpu->cooling);
 	dev_pm_qos_remove_request(&df->max_freq);
+#ifdef CONFIG_KPROFILES
+	dev_pm_qos_remove_request(&df->kp_perf_freq);
+#endif
 	dev_pm_qos_remove_request(&df->boost_freq);
 }
 

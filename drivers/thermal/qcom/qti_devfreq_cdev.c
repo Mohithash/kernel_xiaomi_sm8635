@@ -16,6 +16,13 @@
 #include <linux/thermal.h>
 #include <linux/workqueue.h>
 
+#ifdef CONFIG_KPROFILES
+extern unsigned int KP_MODE_CHANGE;
+extern int kp_active_mode(void);
+extern int kp_notifier_register_client(struct notifier_block *nb);
+extern int kp_notifier_unregister_client(struct notifier_block *nb);
+#endif
+
 #define MAX_RETRY_CNT 20
 #define RETRY_DELAY msecs_to_jiffies(1000)
 #define DEVFREQ_CDEV_NAME "gpu"
@@ -32,9 +39,48 @@ struct devfreq_cdev_device {
 	struct dev_pm_qos_request qos_max_freq_req;
 	struct delayed_work register_work;
 	struct thermal_cooling_device *cdev;
+#ifdef CONFIG_KPROFILES
+	/** kp_perf_override: true when kprofiles performance mode is active */
+	bool kp_perf_override;
+	/** kp_nb: kprofiles notifier for GPU max freq override */
+	struct notifier_block kp_nb;
+#endif
 };
 
 static struct devfreq_cdev_device *devfreq_cdev;
+
+#ifdef CONFIG_KPROFILES
+static int devfreq_cdev_kp_notifier_cb(struct notifier_block *nb,
+					unsigned long action, void *data)
+{
+	struct devfreq_cdev_device *cdev_data =
+		container_of(nb, struct devfreq_cdev_device, kp_nb);
+	unsigned int mode;
+	int ret;
+
+	if (action != KP_MODE_CHANGE)
+		return NOTIFY_DONE;
+
+	mode = (unsigned int)(uintptr_t)data;
+	cdev_data->kp_perf_override = (mode == 3); /* Performance mode */
+
+	/*
+	 * In performance mode: immediately force state 0 (max GPU freq),
+	 * bypassing the thermal daemon's proactive throttling policy.
+	 * The thermal daemon keeps its state internally; normal throttling
+	 * resumes as soon as performance mode is exited.
+	 */
+	if (cdev_data->kp_perf_override && cdev_data->freq_table &&
+	    cdev_data->cur_state != 0) {
+		ret = dev_pm_qos_update_request(&cdev_data->qos_max_freq_req,
+						cdev_data->freq_table[0]);
+		if (ret >= 0)
+			cdev_data->cur_state = 0;
+	}
+
+	return NOTIFY_OK;
+}
+#endif /* CONFIG_KPROFILES */
 
 static int devfreq_cdev_set_state(struct thermal_cooling_device *cdev,
 					unsigned long state)
@@ -42,6 +88,15 @@ static int devfreq_cdev_set_state(struct thermal_cooling_device *cdev,
 	struct devfreq_cdev_device *cdev_data = cdev->devdata;
 	int ret = 0;
 	unsigned long freq;
+
+#ifdef CONFIG_KPROFILES
+	/*
+	 * In performance kprofiles mode, prevent the thermal daemon from
+	 * throttling the GPU below the maximum OPP (state 0 = top freq).
+	 */
+	if (cdev_data->kp_perf_override && state > 0)
+		state = 0;
+#endif
 
 	if (state > cdev_data->max_state)
 		return -EINVAL;
@@ -144,6 +199,14 @@ static void devfreq_cdev_work(struct work_struct *work)
 		goto qos_exit;
 	}
 
+#ifdef CONFIG_KPROFILES
+	cdev_data->kp_nb.notifier_call = devfreq_cdev_kp_notifier_cb;
+	kp_notifier_register_client(&cdev_data->kp_nb);
+	/* Apply initial kprofiles state */
+	devfreq_cdev_kp_notifier_cb(&cdev_data->kp_nb, KP_MODE_CHANGE,
+				    (void *)(uintptr_t)kp_active_mode());
+#endif
+
 	return;
 
 qos_exit:
@@ -172,6 +235,9 @@ static int devfreq_cdev_probe(struct platform_device *pdev)
 static int devfreq_cdev_remove(struct platform_device *pdev)
 {
 	if (devfreq_cdev->cdev) {
+#ifdef CONFIG_KPROFILES
+		kp_notifier_unregister_client(&devfreq_cdev->kp_nb);
+#endif
 		thermal_cooling_device_unregister(devfreq_cdev->cdev);
 		dev_pm_qos_remove_request(&devfreq_cdev->qos_max_freq_req);
 		kfree(devfreq_cdev->freq_table);
