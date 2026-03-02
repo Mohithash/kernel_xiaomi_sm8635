@@ -557,6 +557,8 @@ enum xm_chg_debug_type {
 	CHG_UI_SOH_SN_CODE,
 	CHG_UI_SLAVE_SOH_SN_CODE,
 	CHG_CLOUD_FOD_DATA,
+	UNDEFINED,
+	CHG_UI_BATT_SN_CODE,
 	CHG_DEBUG_TYPE_MAX,
 };
 
@@ -837,6 +839,7 @@ struct battery_chg_dev {
 	char				ui_soh_data[CHG_DEBUG_DATA_LEN];
 	char				ui_slave_soh_data[CHG_DEBUG_DATA_LEN];
 	char				cloud_fod_data[CHG_DEBUG_DATA_LEN];
+	char				batt_sn_data[CHG_DEBUG_DATA_LEN];
 	bool				battery_auth;
 	bool				slave_battery_auth;
 	bool				slave_fg_verify_flag;
@@ -1479,6 +1482,10 @@ static void handle_message(struct battery_chg_dev *bcdev, void *data,
 			} else if (chg_debug_data->type == CHG_SLAVE_UI_SOH_DATA) {
 				memset(bcdev->ui_slave_soh_data, '\0', CHG_DEBUG_DATA_LEN);
 				memcpy(bcdev->ui_slave_soh_data, chg_debug_data->data, CHG_DEBUG_DATA_LEN);
+				ack_set = true;
+			} else if (chg_debug_data->type == CHG_UI_BATT_SN_CODE) {
+				memset(bcdev->batt_sn_data, '\0', CHG_DEBUG_DATA_LEN);
+				memcpy(bcdev->batt_sn_data, chg_debug_data->data, CHG_DEBUG_DATA_LEN);
 				ack_set = true;
 			} else if (chg_debug_data->type == CHG_UI_SLAVE_SOH_SN_CODE) {
                                 memset(bcdev->ui_slave_soh_data, '\0', CHG_DEBUG_DATA_LEN);
@@ -8257,6 +8264,26 @@ static ssize_t fg2_soh_sn_show(struct class *c,
 }
 static CLASS_ATTR_RO(fg2_soh_sn);
 
+static ssize_t batt_sn_show(struct class *c,
+				struct class_attribute *attr, char *buf)
+{
+	struct battery_chg_dev *bcdev = container_of(c, struct battery_chg_dev,
+						battery_class);
+	struct psy_state *pst = &bcdev->psy_list[PSY_TYPE_XM];
+	struct chg_debug_msg req_msg = { { 0 } };
+	int rc;
+	req_msg.property_id = XM_PROP_CHG_DEBUG;
+	req_msg.type = CHG_UI_BATT_SN_CODE;
+	req_msg.hdr.owner = MSG_OWNER_BC;
+	req_msg.hdr.type = MSG_TYPE_REQ_RESP;
+	req_msg.hdr.opcode = pst->opcode_get;
+	rc = battery_chg_write(bcdev, &req_msg, sizeof(req_msg));
+	if (rc < 0)
+		return rc;
+	return scnprintf(buf, PAGE_SIZE, "%s", bcdev->batt_sn_data);
+}
+static CLASS_ATTR_RO(batt_sn);
+
 static ssize_t calc_rvalue_show(struct class *c,
 					struct class_attribute *attr, char *buf)
 {
@@ -9888,6 +9915,7 @@ static struct attribute *battery_class_attrs[] = {
 	&class_attr_ui_slave_soh.attr,
 	&class_attr_soh_sn.attr,
 	&class_attr_fg2_soh_sn.attr,
+	&class_attr_batt_sn.attr,
 	&class_attr_calc_rvalue.attr,
 	&class_attr_dp.attr,
 	&class_attr_dm.attr,
