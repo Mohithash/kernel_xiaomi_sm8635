@@ -525,6 +525,7 @@ enum xm_property_id {
 	XM_PROP_CP_FSW,
 	XM_PROP_CP_IOUT,
 #endif
+	XM_PROP_REVERSE_QUICK_CHARGE,
 	XM_PROP_LAST_NODE, // must be added to the end
 	XM_PROP_MAX,
 };
@@ -7558,6 +7559,41 @@ static ssize_t cloud_fod_store(struct class *c,
 }
 static CLASS_ATTR_RW(cloud_fod);
 
+static ssize_t reverse_quick_charge_show(struct class *c,
+			struct class_attribute *attr, char *buf)
+{
+	struct battery_chg_dev *bcdev = container_of(c, struct battery_chg_dev,
+						battery_class);
+	struct psy_state *pst = &bcdev->psy_list[PSY_TYPE_XM];
+	int rc;
+
+	rc = read_property_id(bcdev, pst, XM_PROP_REVERSE_QUICK_CHARGE);
+	if (rc < 0)
+		return rc;
+
+	return scnprintf(buf, PAGE_SIZE, "%d\n", pst->prop[XM_PROP_REVERSE_QUICK_CHARGE]);
+}
+
+static ssize_t reverse_quick_charge_store(struct class *c,
+		struct class_attribute *attr, const char *buf, size_t count)
+{
+	struct battery_chg_dev *bcdev = container_of(c,
+				struct battery_chg_dev, battery_class);
+	int rc;
+	int val;
+
+	if (kstrtoint(buf, 10, &val))
+		return -EINVAL;
+
+	rc = write_property_id(bcdev, &bcdev->psy_list[PSY_TYPE_XM],
+					XM_PROP_REVERSE_QUICK_CHARGE, val);
+	if (rc < 0)
+		return rc;
+
+	return count;
+}
+static CLASS_ATTR_RW(reverse_quick_charge);
+
 static ssize_t last_node_show(struct class *c,
 			struct class_attribute *attr, char *buf)
 {
@@ -10124,6 +10160,7 @@ static struct attribute *battery_class_attrs[] = {
 #endif
 	&class_attr_cloud_dynamic_shutdown.attr,
 	&class_attr_cloud_fod.attr,
+	&class_attr_reverse_quick_charge.attr,
 	&class_attr_last_node.attr,
 	&class_attr_fastcharge_enable.attr,
 	NULL,
@@ -10647,6 +10684,10 @@ static int add_xiaomi_uevent(struct device *dev, struct kobj_uevent_env *env)
 
 	reverse_chg_mode_show( &(bcdev->battery_class), NULL, prop_buf);
 	snprintf(uevent_string, MAX_UEVENT_LENGTH, "POWER_SUPPLY_REVERSE_CHG_MODE=%s", prop_buf);
+	add_uevent_var(env, uevent_string);
+
+	reverse_quick_charge_show(&(bcdev->battery_class), NULL, prop_buf);
+	snprintf(uevent_string, MAX_UEVENT_LENGTH, "POWER_SUPPLY_REVERSE_QUICK_CHARGE=%s", prop_buf);
 	add_uevent_var(env, uevent_string);
 #endif
 
