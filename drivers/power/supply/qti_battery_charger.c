@@ -488,6 +488,7 @@ enum xm_property_id {
 	XM_PROP_PACK_VENDOR_ID,
 	XM_PROP_CELL_VENDOR_ID,
 	XM_PROP_DOD_COUNT,
+	XM_PROP_DOD_COUNTLT,
 	XM_PROP_DOUBLE85,
 	XM_PROP_SOH_NEW,
 	XM_PROP_REMOVE_TEMP_LIMIT,
@@ -6454,6 +6455,40 @@ static ssize_t dod_count_store(struct class *c,
 }
 static CLASS_ATTR_RW(dod_count);
 
+static ssize_t dod_countLT_show(struct class *c,
+					struct class_attribute *attr, char *buf)
+{
+	struct battery_chg_dev *bcdev = container_of(c, struct battery_chg_dev,
+						battery_class);
+	struct psy_state *pst = &bcdev->psy_list[PSY_TYPE_XM];
+	int rc;
+
+	rc = read_property_id(bcdev, pst, XM_PROP_DOD_COUNTLT);
+	if (rc < 0)
+		return rc;
+	return scnprintf(buf, PAGE_SIZE, "%d\n", pst->prop[XM_PROP_DOD_COUNTLT]);
+}
+
+static ssize_t dod_countLT_store(struct class *c,
+		struct class_attribute *attr, const char *buf, size_t count)
+{
+	struct battery_chg_dev *bcdev = container_of(c,
+				struct battery_chg_dev, battery_class);
+	int rc;
+	int val;
+
+	if (kstrtoint(buf, 0, &val))
+		return -EINVAL;
+
+	rc = write_property_id(bcdev, &bcdev->psy_list[PSY_TYPE_XM],
+					XM_PROP_DOD_COUNTLT, val);
+	if (rc < 0)
+		return rc;
+
+	return count;
+}
+static CLASS_ATTR_RW(dod_countLT);
+
 static ssize_t fg1_qmax_show(struct class *c,
 					struct class_attribute *attr, char *buf)
 {
@@ -9979,6 +10014,7 @@ static struct attribute *battery_class_attrs[] = {
 	&class_attr_handle_state.attr,
 	&class_attr_handle_stop_charging.attr,
 	&class_attr_dod_count.attr,
+	&class_attr_dod_countLT.attr,
 #if defined(CONFIG_MI_SC760X)
 	&class_attr_sc760x_chip_ok.attr,
 	&class_attr_sc760x_slave_chip_ok.attr,
