@@ -557,7 +557,7 @@ enum xm_chg_debug_type {
 	CHG_UI_SOH_SN_CODE,
 	CHG_UI_SLAVE_SOH_SN_CODE,
 	CHG_CLOUD_FOD_DATA,
-	UNDEFINED,
+	CHG_UI_CLOUD_DYNAMIC_SHUTDOWN_CODE,
 	CHG_UI_BATT_SN_CODE,
 	CHG_DEBUG_TYPE_MAX,
 };
@@ -839,6 +839,7 @@ struct battery_chg_dev {
 	char				ui_soh_data[CHG_DEBUG_DATA_LEN];
 	char				ui_slave_soh_data[CHG_DEBUG_DATA_LEN];
 	char				cloud_fod_data[CHG_DEBUG_DATA_LEN];
+	char				cloud_dynamic_shutdown_data[CHG_DEBUG_DATA_LEN];
 	char				batt_sn_data[CHG_DEBUG_DATA_LEN];
 	bool				battery_auth;
 	bool				slave_battery_auth;
@@ -1491,7 +1492,11 @@ static void handle_message(struct battery_chg_dev *bcdev, void *data,
                                 memset(bcdev->ui_slave_soh_data, '\0', CHG_DEBUG_DATA_LEN);
                                 memcpy(bcdev->ui_slave_soh_data, chg_debug_data->data, CHG_DEBUG_DATA_LEN);
                                 ack_set = true;
-                        }else if (chg_debug_data->type == CHG_CLOUD_FOD_DATA) {
+			} else if (chg_debug_data->type == CHG_UI_CLOUD_DYNAMIC_SHUTDOWN_CODE) {
+				memset(bcdev->cloud_dynamic_shutdown_data, '\0', CHG_DEBUG_DATA_LEN);
+				memcpy(bcdev->cloud_dynamic_shutdown_data, chg_debug_data->data, CHG_DEBUG_DATA_LEN);
+				ack_set = true;
+                        } else if (chg_debug_data->type == CHG_CLOUD_FOD_DATA) {
 				memset(bcdev->cloud_fod_data, '\0', CHG_DEBUG_DATA_LEN);
 				memcpy(bcdev->cloud_fod_data, chg_debug_data->data, CHG_DEBUG_DATA_LEN);
 				ack_set = true;
@@ -7386,6 +7391,53 @@ static ssize_t power_max_show(struct class *c,
 }
 static CLASS_ATTR_RO(power_max);
 
+static ssize_t cloud_dynamic_shutdown_show(struct class *c,
+					     struct class_attribute *attr, char *buf)
+{
+	struct battery_chg_dev *bcdev = container_of(c, struct battery_chg_dev,
+								   battery_class);
+	struct psy_state *pst = &bcdev->psy_list[PSY_TYPE_XM];
+	struct chg_debug_msg req_msg = { { 0 } };
+	int rc;
+
+	req_msg.property_id = XM_PROP_CHG_DEBUG;
+	req_msg.type = CHG_UI_CLOUD_DYNAMIC_SHUTDOWN_CODE;
+	req_msg.hdr.owner = MSG_OWNER_BC;
+	req_msg.hdr.type = MSG_TYPE_REQ_RESP;
+	req_msg.hdr.opcode = pst->opcode_get;
+
+	rc = battery_chg_write(bcdev, &req_msg, sizeof(req_msg));
+	if (rc < 0)
+		return rc;
+	return scnprintf(buf, PAGE_SIZE, "%s", bcdev->cloud_dynamic_shutdown_data);
+}
+
+static ssize_t cloud_dynamic_shutdown_store(struct class *c,
+					      struct class_attribute *attr,
+					      const char *buf, size_t count)
+{
+	struct battery_chg_dev *bcdev = container_of(c, struct battery_chg_dev,
+								    battery_class);
+	struct psy_state *pst = &bcdev->psy_list[PSY_TYPE_XM];
+	struct chg_debug_msg req_msg = { { 0 } };
+	int rc;
+
+	req_msg.property_id = XM_PROP_CHG_DEBUG;
+	req_msg.type = CHG_UI_CLOUD_DYNAMIC_SHUTDOWN_CODE;
+	req_msg.hdr.owner = MSG_OWNER_BC;
+	req_msg.hdr.type = MSG_TYPE_REQ_RESP;
+	req_msg.hdr.opcode = pst->opcode_set;
+
+	memset(req_msg.data, '\0', sizeof(req_msg.data));
+	strncpy(req_msg.data, buf, count);
+
+	rc = battery_chg_write(bcdev, &req_msg, sizeof(req_msg));
+	if (rc < 0)
+		return rc;
+	return count;
+}
+static CLASS_ATTR_RW(cloud_dynamic_shutdown);
+
 static ssize_t cloud_fod_show(struct class *c,
 					struct class_attribute *attr, char *buf)
 {
@@ -9944,6 +9996,7 @@ static struct attribute *battery_class_attrs[] = {
 	&class_attr_cp_fsw.attr,
 	&class_attr_cp_iout.attr,
 #endif
+	&class_attr_cloud_dynamic_shutdown.attr,
 	&class_attr_cloud_fod.attr,
 	&class_attr_last_node.attr,
 	&class_attr_fastcharge_enable.attr,
