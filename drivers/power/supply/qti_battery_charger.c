@@ -459,6 +459,7 @@ enum xm_property_id {
 	XM_PROP_FG2_RM,
 	XM_PROP_MAX_LIFE_VOL,
 	XM_PROP_MAX_LIFE_TEMP,
+	XM_PROP_OVER_VOL_DURATION,
 	XM_PROP_FG2_FCC,
 	XM_PROP_FG2_SOH,
 	XM_PROP_FG2_CYCLE,
@@ -8536,6 +8537,22 @@ static ssize_t max_life_temp_show(struct class *c,
 }
 static CLASS_ATTR_RO(max_life_temp);
 
+static ssize_t over_vol_duration_show(struct class *c,
+					struct class_attribute *attr, char *buf)
+{
+	struct battery_chg_dev *bcdev = container_of(c, struct battery_chg_dev,
+						battery_class);
+	struct psy_state *pst = &bcdev->psy_list[PSY_TYPE_XM];
+	int rc;
+
+	rc = read_property_id(bcdev, pst, XM_PROP_OVER_VOL_DURATION);
+	if (rc < 0)
+		return rc;
+
+	return scnprintf(buf, PAGE_SIZE, "%d\n", pst->prop[XM_PROP_OVER_VOL_DURATION]);
+}
+static CLASS_ATTR_RO(over_vol_duration);
+
 static ssize_t handle_state_show(struct class *c,
 					struct class_attribute *attr, char *buf)
 {
@@ -10083,6 +10100,7 @@ static struct attribute *battery_class_attrs[] = {
 	&class_attr_maxtemptime.attr,
 	&class_attr_max_life_vol.attr,
 	&class_attr_max_life_temp.attr,
+	&class_attr_over_vol_duration.attr,
 	&class_attr_handle_state.attr,
 	&class_attr_handle_stop_charging.attr,
 	&class_attr_dod_count.attr,
