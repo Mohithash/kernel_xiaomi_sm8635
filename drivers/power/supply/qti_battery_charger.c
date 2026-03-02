@@ -457,6 +457,8 @@ enum xm_property_id {
 	XM_PROP_SLAVE_CHIP_OK,
 	XM_PROP_SLAVE_AUTHENTIC,
 	XM_PROP_FG2_RM,
+	XM_PROP_MAX_LIFE_VOL,
+	XM_PROP_MAX_LIFE_TEMP,
 	XM_PROP_FG2_FCC,
 	XM_PROP_FG2_SOH,
 	XM_PROP_FG2_CYCLE,
@@ -8467,6 +8469,38 @@ static ssize_t maxtemptime_show(struct class *c,
 }
 static CLASS_ATTR_RO(maxtemptime);
 
+static ssize_t max_life_vol_show(struct class *c,
+					struct class_attribute *attr, char *buf)
+{
+	struct battery_chg_dev *bcdev = container_of(c, struct battery_chg_dev,
+						battery_class);
+	struct psy_state *pst = &bcdev->psy_list[PSY_TYPE_XM];
+	int rc;
+
+	rc = read_property_id(bcdev, pst, XM_PROP_MAX_LIFE_VOL);
+	if (rc < 0)
+		return rc;
+
+	return scnprintf(buf, PAGE_SIZE, "%d\n", pst->prop[XM_PROP_MAX_LIFE_VOL]);
+}
+static CLASS_ATTR_RO(max_life_vol);
+
+static ssize_t max_life_temp_show(struct class *c,
+					struct class_attribute *attr, char *buf)
+{
+	struct battery_chg_dev *bcdev = container_of(c, struct battery_chg_dev,
+						battery_class);
+	struct psy_state *pst = &bcdev->psy_list[PSY_TYPE_XM];
+	int rc;
+
+	rc = read_property_id(bcdev, pst, XM_PROP_MAX_LIFE_TEMP);
+	if (rc < 0)
+		return rc;
+
+	return scnprintf(buf, PAGE_SIZE, "%d\n", pst->prop[XM_PROP_MAX_LIFE_TEMP]);
+}
+static CLASS_ATTR_RO(max_life_temp);
+
 static ssize_t handle_state_show(struct class *c,
 					struct class_attribute *attr, char *buf)
 {
@@ -10011,6 +10045,8 @@ static struct attribute *battery_class_attrs[] = {
 	&class_attr_maxtemp_occurtime.attr,
 	&class_attr_runtime.attr,
 	&class_attr_maxtemptime.attr,
+	&class_attr_max_life_vol.attr,
+	&class_attr_max_life_temp.attr,
 	&class_attr_handle_state.attr,
 	&class_attr_handle_stop_charging.attr,
 	&class_attr_dod_count.attr,
