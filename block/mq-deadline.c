@@ -80,6 +80,7 @@ struct dd_per_prio {
 	struct rb_root sort_list[DD_DIR_COUNT];
 	struct list_head fifo_list[DD_DIR_COUNT];
 	/* Next request in FIFO order. Read, write or both are NULL. */
+	sector_t latest_pos[DD_DIR_COUNT];
 	struct request *next_rq[DD_DIR_COUNT];
 	struct io_stats_per_prio stats;
 };
@@ -419,6 +420,20 @@ static bool started_after(struct deadline_data *dd, struct request *rq,
 	return time_after(start_time, latest_start);
 }
 
+static struct request *dd_start_request(enum dd_data_dir data_dir,
+					struct dd_per_prio *per_prio,
+					struct request *rq)
+{
+	per_prio->latest_pos[data_dir] = blk_rq_pos(rq);
+	per_prio->stats.dispatched++;
+	/*
+	 * If the request needs its target zone locked, do it.
+	 */
+	blk_req_zone_write_lock(rq);
+	rq->rq_flags |= RQF_STARTED;
+	return rq;
+}
+
 /*
  * deadline_dispatch_requests selects the best request according to
  * read/write expire, fifo_batch, etc and with a start time <= @latest_start.
@@ -429,8 +444,6 @@ static struct request *__dd_dispatch_request(struct deadline_data *dd,
 {
 	struct request *rq, *next_rq;
 	enum dd_data_dir data_dir;
-	enum dd_prio prio;
-	u8 ioprio_class;
 
 	lockdep_assert_held(&dd->lock);
 
@@ -440,7 +453,8 @@ static struct request *__dd_dispatch_request(struct deadline_data *dd,
 		if (started_after(dd, rq, latest_start))
 			return NULL;
 		list_del_init(&rq->queuelist);
-		goto done;
+		data_dir = rq_data_dir(rq);
+		return dd_start_request(data_dir, per_prio, rq);
 	}
 
 	/*
@@ -524,16 +538,7 @@ dispatch_request:
 	 */
 	dd->batching++;
 	deadline_move_request(dd, per_prio, rq);
-done:
-	ioprio_class = dd_rq_ioclass(rq);
-	prio = ioprio_class_to_prio[ioprio_class];
-	dd->per_prio[prio].stats.dispatched++;
-	/*
-	 * If the request needs its target zone locked, do it.
-	 */
-	blk_req_zone_write_lock(rq);
-	rq->rq_flags |= RQF_STARTED;
-	return rq;
+	return dd_start_request(data_dir, per_prio, rq);
 }
 
 /*
@@ -806,10 +811,9 @@ static void dd_insert_request(struct blk_mq_hw_ctx *hctx, struct request *rq,
 
 	prio = ioprio_class_to_prio[ioprio_class];
 	per_prio = &dd->per_prio[prio];
-	if (!rq->elv.priv[0]) {
+	if (!rq->elv.priv[0])
 		per_prio->stats.inserted++;
-		rq->elv.priv[0] = (void *)(uintptr_t)1;
-	}
+	rq->elv.priv[0] = per_prio;
 
 	if (blk_mq_sched_try_insert_merge(q, rq, &free)) {
 		blk_mq_free_requests(&free);
@@ -896,9 +900,7 @@ static void dd_finish_request(struct request *rq)
 {
 	struct request_queue *q = rq->q;
 	struct deadline_data *dd = q->elevator->elevator_data;
-	const u8 ioprio_class = dd_rq_ioclass(rq);
-	const enum dd_prio prio = ioprio_class_to_prio[ioprio_class];
-	struct dd_per_prio *per_prio = &dd->per_prio[prio];
+	struct dd_per_prio *per_prio = rq->elv.priv[0];
 
 	/*
 	 * The block layer core may call dd_finish_request() without having
