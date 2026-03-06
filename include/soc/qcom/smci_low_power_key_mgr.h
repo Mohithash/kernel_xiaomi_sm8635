@@ -9,6 +9,10 @@ struct keymgr_key_info {
 	uint32_t reserved;
 };
 
+struct keymgr_key_info_v2 {
+	uint32_t key_size;
+};
+
 #define KEYMANAGER_UID (0x13B)
 
 #define KEY_MGR_HIBERNATE 1
@@ -23,6 +27,7 @@ struct keymgr_key_info {
 #define KEY_MGR_OP_GETKEY 0
 #define KEY_MGR_OP_PREPARE 1
 #define KEY_MGR_OP_RESERVED 2
+#define KEY_MGR_OP_PREPARE_V2 3
 
 static inline int32_t
 key_manager_release(struct smci_object self)
@@ -70,5 +75,23 @@ key_manager_prepare(struct smci_object self, uint32_t event_val,
 	i.m_keyinfo = *keyinfo_ptr;
 
 	return smci_object_invoke(self, KEY_MGR_OP_PREPARE, a,
+				  SMCI_OBJECT_COUNTS_PACK(1, 0, 0, 0));
+}
+
+static inline int32_t
+key_manager_prepare_v2(struct smci_object self, uint32_t event_val,
+			    const struct keymgr_key_info_v2 *keyinfo_ptr)
+{
+	union smci_object_arg a[1] = {{{0, 0}}};
+	struct {
+		uint32_t m_event;
+		struct keymgr_key_info_v2 m_keyinfo;
+	} i = {0};
+
+	a[0].b = (struct smci_object_buf) { &i, 8 };
+	i.m_event = event_val;
+	i.m_keyinfo = *keyinfo_ptr;
+
+	return smci_object_invoke(self, KEY_MGR_OP_PREPARE_V2, a,
 				  SMCI_OBJECT_COUNTS_PACK(1, 0, 0, 0));
 }

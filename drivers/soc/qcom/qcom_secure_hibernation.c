@@ -611,30 +611,52 @@ int key_restore(void)
 
 }
 
-int key_mgr_prepare(uint32_t event, const struct keymgr_key_info *key_info)
+static int key_mgr_prepare(void)
 {
+	int ret = 0;
+	struct keymgr_key_info *key_info;
+	struct keymgr_key_info_v2 *key_info_v2;
+
 	if (setup()) {
 		cleanup();
 		return -EINVAL;
 	}
-	int ret = key_manager_prepare(key_mgr_object, event, key_info);
+
+	key_info = kmalloc(sizeof(struct keymgr_key_info), GFP_KERNEL);
+	if (!key_info)
+		return -ENOMEM;
+
+	key_info_v2 = kmalloc(sizeof(struct keymgr_key_info_v2), GFP_KERNEL);
+	if (!key_info_v2) {
+		kfree(key_info);
+		return -ENOMEM;
+	}
+
+	key_info->key_size = AES256_KEY_SIZE;
+	key_info->reserved = 0;
+	key_info_v2->key_size = AES256_KEY_SIZE;
+
+	ret = key_manager_prepare_v2(key_mgr_object,
+				     KEY_MGR_HIBERNATE_WITH_ENCRYPTION, key_info_v2);
+	if (ret == SMCI_OBJECT_ERROR_INVALID) {
+		pr_info("%s: calling key_manager_prepare\n", __func__);
+		ret = key_manager_prepare(key_mgr_object,
+					  KEY_MGR_HIBERNATE_WITH_ENCRYPTION, key_info);
+	}
 
 	cleanup();
+	kfree(key_info);
+	kfree(key_info_v2);
 	return ret;
 }
 
 int get_key_for_hib(void)
 {
 	size_t key_len_out;
-	struct keymgr_key_info *key_info;
 
 	pr_info("%s: Getting key from SSG\n", __func__);
-	key_info = kmalloc(sizeof(struct keymgr_key_info), GFP_KERNEL);
-	if (!key_info)
-		return -ENOMEM;
-	key_info->key_size = AES256_KEY_SIZE;
 
-	qtee_ret = key_mgr_prepare(KEY_MGR_HIBERNATE_WITH_ENCRYPTION, key_info);
+	qtee_ret = key_mgr_prepare();
 	if (qtee_ret) {
 		if (qtee_ret == INVALID_OPERATION_CHECK) {
 			pr_err("%s: Thrashing the old key.. %d, %d\n", __func__, qtee_ret,
@@ -644,19 +666,18 @@ int get_key_for_hib(void)
 			if (qtee_ret) {
 				pr_err("%s: Failed to init QTEE: key_mgr_get_key: %d\n",
 					__func__, qtee_ret);
-				goto free_key_info;
+				goto exit;
 			}
-			qtee_ret = key_mgr_prepare(KEY_MGR_HIBERNATE_WITH_ENCRYPTION,
-				key_info);
+			qtee_ret = key_mgr_prepare();
 			if (qtee_ret) {
 				pr_err("%s: Failed to init QTEE: key_mgr_prepare: %d\n",
 					 __func__, qtee_ret);
-				goto free_key_info;
+				goto exit;
 			}
 		} else {
 			pr_err("%s: Failed to init QTEE: key_mgr_prepare: %d\n",
 					 __func__, qtee_ret);
-			goto free_key_info;
+			goto exit;
 		}
 	}
 
@@ -665,9 +686,7 @@ int get_key_for_hib(void)
 	if (qtee_ret)
 		pr_err("%s: Failed to get Key: %d\n", __func__, qtee_ret);
 
-free_key_info:
-	kfree(key_info);
-
+exit:
 	return qtee_ret;
 }
 EXPORT_SYMBOL_GPL(get_key_for_hib);
