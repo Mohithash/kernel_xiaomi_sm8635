@@ -557,3 +557,9 @@ __tracepoint_android_vh_pcp_alloc_factor_adjust
 # required by mi cma pool
 cma_mutex
 
+# required by low_lat_mem dfx
+__traceiter_android_vh_alloc_pages_start
+__tracepoint_android_vh_alloc_pages_start
+__traceiter_android_vh_alloc_pages_end
+__tracepoint_android_vh_alloc_pages_end
+
