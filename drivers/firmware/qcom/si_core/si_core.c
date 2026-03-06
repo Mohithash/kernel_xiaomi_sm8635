@@ -19,7 +19,6 @@
 
 #if IS_ENABLED(CONFIG_QSEECOM_PROXY)
 #include <linux/qseecom_kernel.h>
-#include <soc/qcom/qseecomi.h>
 #endif
 
 /* Static 'Primordial Object' operations. */
