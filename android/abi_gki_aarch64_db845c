@@ -302,6 +302,7 @@
   gpiochip_get_data
   gpiochip_remove
   gpiod_get_value_cansleep
+  gpiod_is_active_low
   gpiod_set_consumer_name
   gpiod_set_value
   gpiod_set_value_cansleep

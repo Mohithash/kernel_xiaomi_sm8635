@@ -542,3 +542,7 @@ __traceiter_android_vh_nr_pcp_alloc
 __tracepoint_android_vh_nr_pcp_alloc
 __traceiter_android_vh_pcp_alloc_factor_adjust
 __tracepoint_android_vh_pcp_alloc_factor_adjust
+
+# required by mi cma pool
+cma_mutex
+
