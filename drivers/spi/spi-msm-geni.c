@@ -1681,6 +1681,46 @@ static void spi_geni_set_sampling_rate(struct spi_geni_master *mas,
 		__func__, cfg_reg108, cfg_reg109, cfg_seq_start);
 }
 
+/**
+ * spi_verify_proto() - Checks protocol configured in SE engine
+ * @mas: pointer to spi_geni_master
+ *
+ * Return:0 on success, or a negative error code upon failure.
+ */
+static int spi_verify_proto(struct spi_geni_master *mas)
+{
+	struct spi_master *spi = dev_get_drvdata(mas->dev);
+	unsigned int proto;
+	int ret = 0;
+
+	if (!mas->is_le_vm) {
+		ret = pm_runtime_resume_and_get(mas->dev);
+		if (ret < 0) {
+			dev_err(mas->dev, "%s:pm_runtime_get_sync failed %d\n",
+				__func__, ret);
+			WARN_ON_ONCE(1);
+			return ret;
+		}
+	}
+
+	proto = geni_se_read_proto(&mas->spi_rsc);
+
+	if (spi->slave) {
+		if (proto != GENI_SE_SPI_SLAVE) {
+			dev_err(mas->dev, "Invalid proto %d\n", proto);
+			ret = -ENXIO;
+		}
+	} else if (proto != GENI_SE_SPI) {
+		dev_err(mas->dev, "Invalid proto %d\n", proto);
+		ret = -ENXIO;
+	}
+
+	if (!mas->is_le_vm)
+		pm_runtime_put_sync(mas->dev);
+
+	return ret;
+}
+
 /*
  * spi_geni_mas_setup is done once per spi session.
  * In LA, it is called in prepare_transfer_hardware whereas
@@ -1691,27 +1731,18 @@ static void spi_geni_set_sampling_rate(struct spi_geni_master *mas,
 static int spi_geni_mas_setup(struct spi_master *spi)
 {
 	struct spi_geni_master *mas = spi_master_get_devdata(spi);
-	int proto = geni_se_read_proto(&mas->spi_rsc);
 	unsigned int major = 0;
 	unsigned int minor = 0;
 	int hw_ver = 0;
 	int ret = 0;
 
-	if (spi->slave) {
-		if (mas->slave_setup)
-			goto setup_ipc;
-		if (unlikely(proto != GENI_SE_SPI_SLAVE)) {
-			dev_err(mas->dev, "Invalid proto %d\n", proto);
-			return -ENXIO;
-		}
+	if (mas->is_le_vm && !mas->setup) {
+		ret = spi_verify_proto(mas);
+		if (ret)
+			return ret;
 	}
 
 	if (unlikely(!mas->setup)) {
-		if ((unlikely(proto != GENI_SE_SPI)) && (!spi->slave)) {
-			dev_err(mas->dev, "Invalid proto %d\n", proto);
-			return -ENXIO;
-		}
-
 		if (spi->slave)
 			spi_slv_setup(mas);
 
@@ -3090,6 +3121,12 @@ static int spi_geni_probe(struct platform_device *pdev)
 	}
 
 	pm_runtime_enable(&pdev->dev);
+	if (!geni_mas->is_le_vm) {
+		ret = spi_verify_proto(geni_mas);
+		if (ret)
+			goto spi_geni_probe_err;
+	}
+
 	if (device_create_file(geni_mas->dev, &dev_attr_spi_max_dump_size))
 		dev_err(&pdev->dev, "Unable to create device file for max_dump_size\n");
 
