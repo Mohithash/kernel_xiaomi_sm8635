@@ -369,6 +369,7 @@ enum xm_property_id {
 	XM_PROP_MTBF_CURRENT,
 	XM_PROP_THERMAL_TEMP,
 	XM_PROP_FB_BLANK_STATE,
+	XM_PROP_SCREEN_CCTOG,
 	XM_PROP_SMART_BATT,
 	XM_PROP_SMART_FV,
 	XM_PROP_SHIPMODE_COUNT_RESET,
@@ -2303,6 +2304,44 @@ static ssize_t night_charging_show(struct class *c,
 	return scnprintf(buf, PAGE_SIZE, "%u\n", pst->prop[XM_PROP_NIGHT_CHARGING]);
 }
 static CLASS_ATTR_RW(night_charging);
+
+static ssize_t screen_cctog_store(struct class *c,
+					struct class_attribute *attr,
+					const char *buf, size_t count)
+{
+	struct battery_chg_dev *bcdev = container_of(c, struct battery_chg_dev,
+						battery_class);
+	int rc;
+	bool val;
+
+	if (kstrtobool(buf, &val))
+		return -EINVAL;
+
+	pr_err("screen_cctog_store: %d\n", val);
+
+	rc = write_property_id(bcdev, &bcdev->psy_list[PSY_TYPE_XM],
+				XM_PROP_SCREEN_CCTOG, val);
+	if (rc < 0)
+		return rc;
+
+	return count;
+}
+
+static ssize_t screen_cctog_show(struct class *c,
+					struct class_attribute *attr, char *buf)
+{
+	struct battery_chg_dev *bcdev = container_of(c, struct battery_chg_dev,
+						battery_class);
+	struct psy_state *pst = &bcdev->psy_list[PSY_TYPE_XM];
+	int rc;
+
+	rc = read_property_id(bcdev, pst, XM_PROP_SCREEN_CCTOG);
+	if (rc < 0)
+		return rc;
+
+	return scnprintf(buf, PAGE_SIZE, "%u\n", pst->prop[XM_PROP_SCREEN_CCTOG]);
+}
+static CLASS_ATTR_RW(screen_cctog);
 
 static ssize_t usbinterface_store(struct class *c,
 					struct class_attribute *attr,
@@ -9917,6 +9956,7 @@ static struct attribute *battery_class_attrs[] = {
 	&class_attr_smart_batt.attr,
 	&class_attr_smart_fv.attr,
 	&class_attr_night_charging.attr,
+	&class_attr_screen_cctog.attr,
 	&class_attr_usbinterface.attr,
 	&class_attr_request_vdm_cmd.attr,
 	&class_attr_current_state.attr,
