@@ -370,6 +370,7 @@ enum xm_property_id {
 	XM_PROP_THERMAL_TEMP,
 	XM_PROP_FB_BLANK_STATE,
 	XM_PROP_SCREEN_CCTOG,
+	XM_PROP_SOFTWARE_CID,
 	XM_PROP_SMART_BATT,
 	XM_PROP_SMART_FV,
 	XM_PROP_SHIPMODE_COUNT_RESET,
@@ -2274,6 +2275,22 @@ static ssize_t smart_fv_show(struct class *c,
 	return scnprintf(buf, PAGE_SIZE, "%u\n", pst->prop[XM_PROP_SMART_FV]);
 }
 static CLASS_ATTR_RW(smart_fv);
+
+static ssize_t software_cid_show(struct class *c,
+					struct class_attribute *attr, char *buf)
+{
+	struct battery_chg_dev *bcdev = container_of(c, struct battery_chg_dev,
+					battery_class);
+	struct psy_state *pst = &bcdev->psy_list[PSY_TYPE_XM];
+	int rc;
+
+	rc = read_property_id(bcdev, pst, XM_PROP_SOFTWARE_CID);
+	if (rc < 0)
+		return rc;
+
+	return scnprintf(buf, PAGE_SIZE, "%u\n", pst->prop[XM_PROP_SOFTWARE_CID]);
+}
+static CLASS_ATTR_RO(software_cid);
 
 static ssize_t night_charging_store(struct class *c,
 					struct class_attribute *attr,
@@ -9955,6 +9972,7 @@ static struct attribute *battery_class_attrs[] = {
 	&class_attr_soc_decimal_rate.attr,
 	&class_attr_smart_batt.attr,
 	&class_attr_smart_fv.attr,
+	&class_attr_software_cid.attr,
 	&class_attr_night_charging.attr,
 	&class_attr_screen_cctog.attr,
 	&class_attr_usbinterface.attr,
