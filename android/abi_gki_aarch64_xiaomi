@@ -535,6 +535,16 @@ read_swap_cache_async
 unuse_swap_pte
 vfs_fadvise
 
+# required by mi_kernel_monitor.ko
+__tracepoint_android_vh_swapin_start
+__traceiter_android_vh_swapin_start
+__tracepoint_android_vh_swapin_end
+__traceiter_android_vh_swapin_end
+__tracepoint_android_vh_swap_writepage_start
+__traceiter_android_vh_swap_writepage_start
+__tracepoint_android_vh_swap_writepage_end
+__traceiter_android_vh_swap_writepage_end
+
 # required by launch_boost driver
 __traceiter_android_vh_filemap_read
 __tracepoint_android_vh_filemap_read
