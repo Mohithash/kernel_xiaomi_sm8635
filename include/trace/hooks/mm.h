@@ -353,6 +353,12 @@ DECLARE_HOOK(android_vh_pcp_alloc_factor_adjust,
 		struct per_cpu_pages *pcp, struct page *page, int migratetype,
 		unsigned int order),
 	TP_ARGS(zone, pad, pcp, page, migratetype, order));
+DECLARE_HOOK(android_vh_alloc_pages_start,
+	TP_PROTO(u64 *stime),
+	TP_ARGS(stime));
+DECLARE_HOOK(android_vh_alloc_pages_end,
+	TP_PROTO(unsigned int order, gfp_t alloc_gfp, u64 stime),
+	TP_ARGS(order, alloc_gfp, stime));
 #endif /* _TRACE_HOOK_MM_H */
 
 /* This part must be outside protection */

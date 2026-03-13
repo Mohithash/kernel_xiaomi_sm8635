@@ -5862,6 +5862,7 @@ struct page *__alloc_pages(gfp_t gfp, unsigned int order, int preferred_nid,
 	unsigned int alloc_flags = ALLOC_WMARK_LOW;
 	gfp_t alloc_gfp; /* The gfp_t that was actually used for allocation */
 	struct alloc_context ac = { };
+	u64 stime = 0;
 
 	/*
 	 * There are several places where we assume that the order value is sane
@@ -5869,6 +5870,8 @@ struct page *__alloc_pages(gfp_t gfp, unsigned int order, int preferred_nid,
 	 */
 	if (WARN_ON_ONCE_GFP(order >= MAX_ORDER, gfp))
 		return NULL;
+
+	trace_android_vh_alloc_pages_start(&stime);
 
 	gfp &= gfp_allowed_mask;
 	/*
@@ -5918,6 +5921,7 @@ out:
 
 	trace_mm_page_alloc(page, order, alloc_gfp, ac.migratetype);
 	kmsan_alloc_page(page, order, alloc_gfp);
+	trace_android_vh_alloc_pages_end(order, alloc_gfp, stime);
 
 	return page;
 }
