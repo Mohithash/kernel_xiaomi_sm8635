@@ -49,6 +49,8 @@ if (print) { \
 
 #define DEFAULT_BUS_WIDTH	(4)
 
+#define	GENI_SE_QSPI		0x9
+
 /* In KHz */
 #define DEFAULT_SE_CLK	19200
 #define SPI_CORE2X_VOTE	51000
