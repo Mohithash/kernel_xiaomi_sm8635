@@ -2525,6 +2525,42 @@ err_ssr_transfer_one:
 	return ret;
 }
 
+/*
+ * spi_geni_transfer_one_message - Transfer an entire spi message.
+ * @spi - pointer to the spi controller structure.
+ * @msg - pointer to the message to be executed.
+ *
+ * This is the main entry point for processing a complete message.
+ * It processes each transfer in the SPI message. For each transfer
+ * that has either a TX or RX buffer, it invokes the low-level transfer
+ * function spi_geni_transfer_one(). If any transfer fails, the function
+ * logs the error and stops processing further transfers.
+ *
+ * Return: 0 in case of success or a negative error code in case of failure.
+ */
+static int spi_geni_transfer_one_message(struct spi_controller *spi, struct spi_message *msg)
+{
+	struct spi_geni_master *mas = spi_controller_get_devdata(spi);
+	struct spi_transfer *xfer;
+	int ret = 0;
+
+	list_for_each_entry(xfer, &msg->transfers, transfer_list) {
+		ret = spi_geni_transfer_one(spi, msg->spi, xfer);
+		if (ret < 0) {
+			SPI_LOG_ERR(mas->ipc, true, mas->dev,
+				    "SPI transfer failed: %d\n", ret);
+			goto out;
+		}
+		msg->actual_length += xfer->len;
+	}
+
+out:
+	msg->status = ret;
+	spi_finalize_current_message(spi);
+
+	return ret;
+}
+
 static void geni_spi_handle_tx(struct spi_geni_master *mas)
 {
 	int i = 0;
@@ -3198,7 +3234,8 @@ static int spi_geni_probe(struct platform_device *pdev)
 	spi->prepare_transfer_hardware = spi_geni_prepare_transfer_hardware;
 	spi->prepare_message = spi_geni_prepare_message;
 	spi->unprepare_message = spi_geni_unprepare_message;
-	spi->transfer_one = spi_geni_transfer_one;
+	spi->transfer_one = NULL;
+	spi->transfer_one_message = spi_geni_transfer_one_message;
 	spi->unprepare_transfer_hardware
 			= spi_geni_unprepare_transfer_hardware;
 	spi->auto_runtime_pm = false;
