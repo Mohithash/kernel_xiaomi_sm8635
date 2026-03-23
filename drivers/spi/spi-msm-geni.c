@@ -137,8 +137,6 @@
 #define	QSPI_QUAD_SDR		BIT(9)
 #define	QSPI_QUAD_DDR		BIT(8)
 
-#define QSPI_DUMMY_CLK_CNT	0x8
-
 #define SPI_LOG_DBG(log_ctx, print, dev, x...) do { \
 GENI_SE_DBG(log_ctx, print, dev, x); \
 if (dev) \
@@ -276,6 +274,7 @@ struct spi_geni_master {
 	unsigned int proto;
 	bool qspi_ddr_support;
 	bool is_tx_rx; /* Indicates if current transfer Tx_Rx  */
+	u8 dummy_len;
 };
 
 /**
@@ -1043,8 +1042,8 @@ static void spi_gsi_rx_callback(void *cb)
 			return;
 		}
 		if (cb_param->length == xfer->len) {
-			SPI_LOG_DBG(mas->ipc, false, mas->dev,
-			"%s\n", __func__);
+			SPI_LOG_DBG(mas->ipc, false, mas->dev, "GSI Rx Callback for %d bytes\n",
+				    xfer->len);
 			spi_dump_ipc(mas, "GSI Rx", (char *)xfer->rx_buf, xfer->len);
 			complete(&mas->rx_cb);
 		} else {
@@ -1095,7 +1094,7 @@ static void spi_gsi_tx_callback(void *cb)
 		}
 		if (cb_param->length == xfer->len) {
 			SPI_LOG_DBG(mas->ipc, false, mas->dev,
-			"%s\n", __func__);
+				   "GSI Tx Callback for %d bytes\n", xfer->len);
 			spi_dump_ipc(mas, "GSI Tx", (char *)xfer->tx_buf, xfer->len);
 			complete(&mas->tx_cb);
 		} else {
@@ -1241,13 +1240,12 @@ err_spi_geni_unlock_bus:
  * qspi_gsi_xfer_prepare() - Prepare QSPI GSI mode transfer
  * @xfer: Pointer to spi transfer
  * @mas: Pointer to spi_geni_master
- * @dummy_clk_cnt: Dummy clock cycles used in between Tx and Rx phases of the transfer
  * @flags: Flags for qspi config0 support
  *
  * Return: 0 on success, or a negative error code upon failure.
  */
 static int qspi_gsi_xfer_prepare(struct spi_transfer *xfer, struct spi_geni_master *mas,
-				 u8 *dummy_clk_cnt, int *flags)
+				 int *flags)
 {
 	unsigned int buswidth;
 	unsigned int mode;
@@ -1266,12 +1264,10 @@ static int qspi_gsi_xfer_prepare(struct spi_transfer *xfer, struct spi_geni_mast
 		}
 
 		buswidth = xfer->tx_nbits;
-		*dummy_clk_cnt = QSPI_DUMMY_CLK_CNT;
 	} else if (xfer->tx_buf) {
 		buswidth = xfer->tx_nbits;
 	} else if (xfer->rx_buf) {
 		buswidth = xfer->rx_nbits;
-		*dummy_clk_cnt = QSPI_DUMMY_CLK_CNT;
 	} else {
 		SPI_LOG_ERR(mas->ipc, false, mas->dev, "Neither tx_buf nor rx_buf provided.\n");
 		return -EINVAL;
@@ -1288,8 +1284,8 @@ static int qspi_gsi_xfer_prepare(struct spi_transfer *xfer, struct spi_geni_mast
 		break;
 
 	case QSPI_DUAL_LANE:
-		SPI_LOG_ERR(mas->ipc, false, mas->dev, "Dual lane not supported.\n");
-		return -EPROTONOSUPPORT;
+		*flags |=  QSPI_DUAL_SDR;
+		break;
 
 	case QSPI_QUAD_LANE:
 		mode = (mas->qspi_ddr_support) ? QSPI_QUAD_DDR : QSPI_QUAD_SDR;
@@ -1430,7 +1426,6 @@ static int setup_gsi_xfer(struct spi_transfer *xfer, struct spi_transfer *xfer_t
 	struct spi_geni_qcom_ctrl_data *delay_params = NULL;
 	u32 cs_clk_delay = 0;
 	u32 inter_words_delay = 0;
-	u8 dummy_inf_clk_cnt = 0;
 
 	if (mas->is_le_vm && mas->le_gpi_reset_done) {
 		SPI_LOG_DBG(mas->ipc, false, mas->dev,
@@ -1455,7 +1450,7 @@ static int setup_gsi_xfer(struct spi_transfer *xfer, struct spi_transfer *xfer_t
 	}
 
 	if (mas->proto == GENI_SE_QSPI) {
-		ret = qspi_gsi_xfer_prepare(xfer, mas, &dummy_inf_clk_cnt, &go_flags);
+		ret = qspi_gsi_xfer_prepare(xfer, mas, &go_flags);
 		if (ret)
 			return ret;
 	}
@@ -1466,7 +1461,7 @@ static int setup_gsi_xfer(struct spi_transfer *xfer, struct spi_transfer *xfer_t
 		mas->cur_speed_hz = xfer->speed_hz;
 		tx_nent++;
 		c0_tre = setup_config0_tre(xfer, mas, spi_slv->mode,
-					   cs_clk_delay, inter_words_delay, dummy_inf_clk_cnt);
+					   cs_clk_delay, inter_words_delay, mas->dummy_len);
 		if (IS_ERR_OR_NULL(c0_tre)) {
 			dev_err(mas->dev, "%s:Err setting c0tre:%d\n",
 							__func__, ret);
@@ -1818,6 +1813,8 @@ static void spi_geni_set_sampling_rate(struct spi_geni_master *mas,
 static int spi_verify_proto(struct spi_geni_master *mas)
 {
 	struct spi_master *spi = dev_get_drvdata(mas->dev);
+	struct platform_device *pdev = to_platform_device(mas->dev);
+	const char *compatible;
 	int ret = 0;
 
 	if (!mas->is_le_vm) {
@@ -1836,14 +1833,30 @@ static int spi_verify_proto(struct spi_geni_master *mas)
 		if (mas->proto != GENI_SE_SPI_SLAVE) {
 			dev_err(mas->dev, "Invalid proto %d\n", mas->proto);
 			ret = -ENXIO;
+			goto out;
 		}
-	} else if (mas->proto != GENI_SE_SPI && mas->proto != GENI_SE_QSPI) {
-		dev_err(mas->dev, "Invalid proto %d\n", mas->proto);
-		ret = -ENXIO;
+	} else if (!of_property_read_string(pdev->dev.of_node, "compatible", &compatible)) {
+		bool valid_proto = (!strcmp(compatible, "qcom,qspi-geni") &&
+				    mas->proto == GENI_SE_QSPI) ||
+				   (!strcmp(compatible, "qcom,spi-geni") &&
+				    mas->proto == GENI_SE_SPI);
+		if (!valid_proto) {
+			dev_err(mas->dev, "Invalid proto %d or dt node.\n", mas->proto);
+			ret = -ENXIO;
+			goto out;
+		}
 	}
 
-	if (!mas->is_le_vm)
-		pm_runtime_put_sync(mas->dev);
+out:
+	if (!mas->is_le_vm) {
+		int cleanup_ret = pm_runtime_put_sync(mas->dev);
+
+		if (!ret)
+			ret = cleanup_ret;
+		if (cleanup_ret && cleanup_ret != ret)
+			dev_err(mas->dev, "%s:  pm_runtime_put_sync failed %d\n",
+				__func__, cleanup_ret);
+	}
 
 	return ret;
 }
@@ -2555,7 +2568,7 @@ err_ssr_transfer_one:
  *
  * This is the main entry point for processing a complete message.
  * It processes each transfer in the SPI message. For each transfer
- * that has either a TX or RX buffer, it invokes the low-level transfer
+ * that has either a Tx or Rx buffer, it invokes the low-level transfer
  * function spi_geni_transfer_one(). If any transfer fails, the function
  * logs the error and stops processing further transfers.
  *
@@ -2572,22 +2585,30 @@ static int spi_geni_transfer_one_message(struct spi_controller *spi, struct spi_
 	list_for_each_entry(xfer, &msg->transfers, transfer_list) {
 		mas->is_tx_rx = false;
 		xfer_tx_rx = NULL;
+		mas->dummy_len = 0;
 		if (!list_is_last(&xfer->transfer_list, &msg->transfers)) {
 			next_xfer = list_next_entry(xfer, transfer_list);
-			/*
-			 * Check if next transfer is Rx transfer only.
-			 * If yes, then combine current Tx with next Rx into
-			 * a single Tx_Rx transfer.
-			 */
-			if (next_xfer->rx_buf && !next_xfer->tx_buf) {
-				xfer_tx_rx = next_xfer;
-				/* this transfer is Tx_Rx */
+			if (next_xfer->dummy_data) {
+				/*
+				 * Check if next transfer is dummy transfer only.
+				 * If yes, then update the dummy_len and skip the transfer.
+				 */
+				mas->dummy_len = next_xfer->len;
+				if (!list_is_last(&next_xfer->transfer_list,
+						  &msg->transfers))
+					xfer_tx_rx = list_next_entry(next_xfer, transfer_list);
 				mas->is_tx_rx = true;
-				ret = spi_geni_transfer_one(spi, msg->spi, xfer, xfer_tx_rx);
+			} else if (next_xfer->rx_buf && !next_xfer->tx_buf) {
+				/*
+				 * Check if next transfer is Rx transfer. If yes, then combine
+				 * current Tx with next Rx into a single Tx_Rx transfer.
+				 */
+				xfer_tx_rx = next_xfer;
+				mas->is_tx_rx = true;
 			}
-		} else {
-			ret = spi_geni_transfer_one(spi, msg->spi, xfer, xfer_tx_rx);
 		}
+
+		ret = spi_geni_transfer_one(spi, msg->spi, xfer, xfer_tx_rx);
 		if (ret < 0) {
 			SPI_LOG_ERR(mas->ipc, true, mas->dev,
 				    "SPI transfer failed: %d\n", ret);
