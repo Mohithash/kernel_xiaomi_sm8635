@@ -37,8 +37,10 @@ make $KERNEL_DEFCONFIG O=out CC=clang
 make -j$(nproc --all) O=out \
                       CC=clang \
                       ARCH=arm64 \
-                      CROSS_COMPILE=aarch64-linux-gnu- \
+                      LD=ld.lld \
+                      AR=llvm-ar \
                       NM=llvm-nm \
+                      OBJCOPY=llvm-objcopy \
                       OBJDUMP=llvm-objdump \
                       STRIP=llvm-strip
 
