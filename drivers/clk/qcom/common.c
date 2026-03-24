@@ -381,7 +381,6 @@ int qcom_cc_really_probe(struct platform_device *pdev,
 		return -ENOMEM;
 
 	reset = &cc->reset;
-	reset->dev = dev;
 	reset->rcdev.of_node = dev->of_node;
 	reset->rcdev.ops = &qcom_reset_ops;
 	reset->rcdev.owner = dev->driver->owner;
