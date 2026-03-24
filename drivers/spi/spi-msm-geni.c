@@ -2561,6 +2561,18 @@ err_ssr_transfer_one:
 	return ret;
 }
 
+static void spi_geni_set_cs(struct spi_device *spi_slv, bool cs_active)
+{
+	struct gpio_desc *desc = spi_get_csgpiod(spi_slv, 0);
+
+	if (desc) {
+		dev_dbg(&spi_slv->dev,
+			"CS GPIO toggle:  cs_active=%d\n", cs_active);
+			/* Polarity handled by GPIO library */
+		gpiod_set_value_cansleep(desc, cs_active);
+	}
+}
+
 /*
  * spi_geni_transfer_one_message - Transfer an entire spi message.
  * @spi - pointer to the spi controller structure.
@@ -2578,15 +2590,21 @@ static int spi_geni_transfer_one_message(struct spi_controller *spi, struct spi_
 {
 	struct spi_geni_master *mas = spi_controller_get_devdata(spi);
 	struct spi_transfer *xfer;
+	bool keep_cs = false;
 	struct spi_transfer *next_xfer = NULL;
 	struct spi_transfer *xfer_tx_rx = NULL;
 	int ret = 0;
+	bool is_qspi = (mas->proto == GENI_SE_QSPI);
+
+	spi_geni_set_cs(msg->spi, true);
 
 	list_for_each_entry(xfer, &msg->transfers, transfer_list) {
 		mas->is_tx_rx = false;
 		xfer_tx_rx = NULL;
 		mas->dummy_len = 0;
-		if (!list_is_last(&xfer->transfer_list, &msg->transfers)) {
+
+		/* This section applies only to the QSPI protocol, SPI Protocol support is TBD. */
+		if (is_qspi && !list_is_last(&xfer->transfer_list, &msg->transfers)) {
 			next_xfer = list_next_entry(xfer, transfer_list);
 			if (next_xfer->dummy_data) {
 				/*
@@ -2620,9 +2638,15 @@ static int spi_geni_transfer_one_message(struct spi_controller *spi, struct spi_
 			msg->actual_length += xfer_tx_rx->len;
 			xfer = xfer_tx_rx;
 		}
+		if (xfer->cs_change) {
+			if (list_is_last(&xfer->transfer_list, &msg->transfers))
+				keep_cs = true;
+		}
 	}
 
 out:
+	if (ret != 0 || !keep_cs)
+		spi_geni_set_cs(msg->spi, false);
 	msg->status = ret;
 	spi_finalize_current_message(spi);
 
