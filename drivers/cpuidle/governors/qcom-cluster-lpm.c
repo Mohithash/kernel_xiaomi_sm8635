@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/cpu.h>
@@ -439,6 +439,30 @@ struct cluster_governor gov_ops = {
 	.disable = cluster_gov_disable,
 };
 
+static void cleanup_cluster_attrs(struct lpm_cluster *cluster_gov, int max_idx)
+{
+	int i;
+
+	for (i = 0; i <= max_idx && i < cluster_gov->genpd->state_count; i++) {
+		struct qcom_cluster_node *d = cluster_gov->dev_node[i];
+
+		if (d) {
+			if (d->usage_attr[i].attr.name) {
+				sysfs_remove_file(d->kobj, &d->usage_attr[i].attr);
+				kfree(d->usage_attr[i].attr.name);
+			}
+			if (d->idle_time_attr[i].attr.name) {
+				sysfs_remove_file(d->kobj, &d->idle_time_attr[i].attr);
+				kfree(d->idle_time_attr[i].attr.name);
+			}
+			if (d->rejected_attr[i].attr.name) {
+				sysfs_remove_file(d->kobj, &d->rejected_attr[i].attr);
+				kfree(d->rejected_attr[i].attr.name);
+			}
+		}
+	}
+}
+
 static int lpm_cluster_gov_remove(struct platform_device *pdev)
 {
 	struct generic_pm_domain *genpd = pd_to_genpd(pdev->dev.pm_domain);
@@ -449,10 +473,79 @@ static int lpm_cluster_gov_remove(struct platform_device *pdev)
 
 	pm_runtime_disable(&pdev->dev);
 	cluster_gov->genpd->flags &= ~GENPD_FLAG_MIN_RESIDENCY;
+
+	cleanup_cluster_attrs(cluster_gov, cluster_gov->genpd->state_count - 1);
+
 	remove_cluster_sysfs_nodes(cluster_gov);
 	dev_pm_genpd_remove_notifier(cluster_gov->dev);
 
 	return 0;
+}
+
+static ssize_t usage_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+	struct kobj_attribute *k_attr = (struct kobj_attribute *)attr;
+	struct qcom_cluster_node *d;
+	struct generic_pm_domain *genpd;
+	int i;
+
+	if (sscanf(attr->attr.name, "Usage_D%d", &i) != 1)
+		return -EINVAL;
+
+	if (i < 0 || i >= MAX_CLUSTER_STATES)
+		return -EINVAL;
+
+	d = container_of(k_attr, struct qcom_cluster_node, usage_attr[i]);
+	genpd = d->cluster->genpd;
+
+	if (i >= genpd->state_count)
+		return -EINVAL;
+
+	return scnprintf(buf, PAGE_SIZE, "%llu\n", genpd->states[i].usage);
+}
+
+static ssize_t idle_time_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+	struct kobj_attribute *k_attr = (struct kobj_attribute *)attr;
+	struct qcom_cluster_node *d;
+	struct generic_pm_domain *genpd;
+	int i;
+
+	if (sscanf(attr->attr.name, "Time_spent_D%d", &i) != 1)
+		return -EINVAL;
+
+	if (i < 0 || i >= MAX_CLUSTER_STATES)
+		return -EINVAL;
+
+	d = container_of(k_attr, struct qcom_cluster_node, idle_time_attr[i]);
+	genpd = d->cluster->genpd;
+
+	if (i >= genpd->state_count)
+		return -EINVAL;
+
+	return scnprintf(buf, PAGE_SIZE, "%llu\n", ktime_to_us(genpd->states[i].idle_time));
+}
+
+static ssize_t rejected_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+	struct kobj_attribute *k_attr = (struct kobj_attribute *)attr;
+	struct qcom_cluster_node *d;
+	struct generic_pm_domain *genpd;
+	int i;
+
+	if (sscanf(attr->attr.name, "Rejected_D%d", &i) != 1)
+		return -EINVAL;
+
+	if (i < 0 || i >= MAX_CLUSTER_STATES)
+		return -EINVAL;
+
+	d = container_of(k_attr, struct qcom_cluster_node, rejected_attr[i]);
+	genpd = d->cluster->genpd;
+
+	if (i >= genpd->state_count)
+		return -EINVAL;
+
+	return scnprintf(buf, PAGE_SIZE, "%llu\n", genpd->states[i].rejected);
 }
 
 static int lpm_cluster_gov_probe(struct platform_device *pdev)
@@ -490,12 +583,72 @@ static int lpm_cluster_gov_probe(struct platform_device *pdev)
 	list_add_tail(&cluster_gov->list, &cluster_dev_list);
 	cluster_gov->initialized = true;
 
-	for (i = 0; i < cluster_gov->genpd->state_count; i++)
+	for (i = 0; i < cluster_gov->genpd->state_count; i++) {
+		char attr_name[32];
+		struct qcom_cluster_node *d = cluster_gov->dev_node[i];
+
 		cluster_gov->state_allowed[i] = true;
+
+		if (!d) {
+			ret = -EINVAL;
+			goto cleanup_attrs;
+		}
+		/* Usage parameter sysfs node creation */
+		scnprintf(attr_name, sizeof(attr_name), "Usage_D%d", i);
+		d->usage_attr[i].attr.mode = 0444;
+		sysfs_attr_init(&d->usage_attr[i].attr);
+		d->usage_attr[i].attr.name = kstrdup(attr_name, GFP_KERNEL);
+		if (!d->usage_attr[i].attr.name) {
+			ret = -ENOMEM;
+			goto cleanup_attrs;
+		}
+		d->usage_attr[i].show = usage_show;
+
+		ret = sysfs_create_file(d->kobj, &d->usage_attr[i].attr);
+		if (ret)
+			goto cleanup_attrs;
+
+		/* Idle time parameter sysfs node creation */
+		scnprintf(attr_name, sizeof(attr_name), "Time_spent_D%d", i);
+		d->idle_time_attr[i].attr.mode = 0444;
+		sysfs_attr_init(&d->idle_time_attr[i].attr);
+		d->idle_time_attr[i].attr.name = kstrdup(attr_name, GFP_KERNEL);
+		if (!d->idle_time_attr[i].attr.name) {
+			ret = -ENOMEM;
+			goto cleanup_attrs;
+		}
+		d->idle_time_attr[i].show = idle_time_show;
+
+		ret = sysfs_create_file(d->kobj, &d->idle_time_attr[i].attr);
+		if (ret)
+			goto cleanup_attrs;
+
+		/* Rejected parameter sysfs node creation */
+		scnprintf(attr_name, sizeof(attr_name), "Rejected_D%d", i);
+		d->rejected_attr[i].attr.mode = 0444;
+		sysfs_attr_init(&d->rejected_attr[i].attr);
+		d->rejected_attr[i].attr.name = kstrdup(attr_name, GFP_KERNEL);
+		if (!d->rejected_attr[i].attr.name) {
+			ret = -ENOMEM;
+			goto cleanup_attrs;
+		}
+		d->rejected_attr[i].show = rejected_show;
+
+		ret = sysfs_create_file(d->kobj, &d->rejected_attr[i].attr);
+		if (ret)
+			goto cleanup_attrs;
+	}
 
 	register_cluster_governor_ops(&gov_ops);
 
 	return 0;
+
+cleanup_attrs:
+	cleanup_cluster_attrs(cluster_gov, i);
+	pm_runtime_disable(&pdev->dev);
+	dev_pm_genpd_remove_notifier(cluster_gov->dev);
+	list_del(&cluster_gov->list);
+	return ret;
 }
 
 static const struct of_device_id qcom_cluster_lpm[] = {
