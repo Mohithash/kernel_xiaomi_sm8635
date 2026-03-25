@@ -893,11 +893,15 @@ static struct msm_gpi_tre *setup_config0_tre(struct spi_transfer *xfer,
 	c0_tre->dword[2] = MSM_GPI_SPI_CONFIG0_TRE_DWORD2(idx, div);
 	c0_tre->dword[3] = MSM_GPI_SPI_CONFIG0_TRE_DWORD3(0, 0, 0, 0, 1);
 	SPI_LOG_DBG(mas->ipc, false, mas->dev,
-		"%s: flags 0x%x word %d pack %d freq %d idx %d div %d\n",
-		__func__, flags, word_len, pack, mas->cur_speed_hz, idx, div);
+		    "config0_tre: flags 0x%x word %d pack %d freq %d idx %d div %d\n",
+		    flags, word_len, pack, mas->cur_speed_hz, idx, div);
 	SPI_LOG_DBG(mas->ipc, false, mas->dev,
-		"%s: cs_clk_delay %d inter_words_delay %d dummy_clk_cnt %d\n", __func__,
-		cs_clk_delay, inter_words_delay, dummy_clk_cnt);
+		    "config0_tre: cs_clk_delay %d inter_words_delay %d dummy_clk_cnt %d\n",
+		    cs_clk_delay, inter_words_delay, dummy_clk_cnt);
+	SPI_LOG_DBG(mas->ipc, false, mas->dev,
+		    "config0_tre: dword[0]:0x%x dword[1]:0x%x dword[2]:0x%x dword[3]:0x%x\n",
+		    c0_tre->dword[0], c0_tre->dword[1], c0_tre->dword[2], c0_tre->dword[3]);
+
 	return c0_tre;
 }
 
@@ -930,11 +934,14 @@ static struct msm_gpi_tre *setup_go_tre(int cmd, int cs, int rx_len, int flags,
 	}
 	if (cmd & SPI_RX_ONLY)
 		link_rx = 1;
-	go_tre->dword[3] = MSM_GPI_SPI_GO_TRE_DWORD3(link_rx, 0, eot, eob,
-								chain);
+	go_tre->dword[3] = MSM_GPI_SPI_GO_TRE_DWORD3(link_rx, 0, eot, eob, chain);
 	SPI_LOG_DBG(mas->ipc, false, mas->dev,
-	"%s: rx len %d flags 0x%x cs %d cmd %d eot %d eob %d chain %d\n",
-		__func__, rx_len, flags, cs, cmd, eot, eob, chain);
+		    "go_tre: rx len %d flags 0x%x cs %d cmd %d eot %d eob %d chain %d\n",
+		    rx_len, flags, cs, cmd, eot, eob, chain);
+	SPI_LOG_DBG(mas->ipc, false, mas->dev,
+		    "go_tre: dword[0]:0x%x dword[1]:0x%x dword[2]:0x%x dword[3]:0x%x\n",
+		    go_tre->dword[0], go_tre->dword[1], go_tre->dword[2], go_tre->dword[3]);
+
 	return go_tre;
 }
 
@@ -961,6 +968,9 @@ static struct msm_gpi_tre *setup_dma_tre(struct msm_gpi_tre *tre, struct spi_tra
 		tre->dword[2] = MSM_GPI_DMA_W_BUFFER_TRE_DWORD2(xfer->len);
 		tre->dword[3] = MSM_GPI_DMA_W_BUFFER_TRE_DWORD3(0, 0, is_tx, 0, 0);
 	}
+	SPI_LOG_DBG(mas->ipc, false, mas->dev,
+		    "dma_tre: dword[0]:0x%x dword[1]:0x%x dword[2]:0x%x dword[3]:0x%x\n",
+		    tre->dword[0], tre->dword[1], tre->dword[2], tre->dword[3]);
 
 	return tre;
 }
