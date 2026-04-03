@@ -595,3 +595,13 @@ __tracepoint_android_vh_alloc_pages_slowpath_end
 #required by os-cpu
 __tracepoint_android_vh_futex_wait_queue_start
 __traceiter_android_vh_futex_wait_queue_start
+
+# low lat mem
+__tracepoint_android_vh_compact_bypass
+__traceiter_android_vh_compact_bypass
+__tracepoint_android_vh_cma_release_bypass
+__traceiter_android_vh_cma_release_bypass
+__tracepoint_android_vh_cma_alloc_end
+__traceiter_android_vh_cma_alloc_end
+
+
