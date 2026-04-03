@@ -21,6 +21,20 @@
 #define VDAC_FULL_RANGE				0x00
 #define VDAC_HALF_RANGE				0x01
 
+#define VDAC_VDAC_PA_LVL_CTL			0x61
+#define VDAC_PA_LVL_VALUE			0x04
+
+#define VDAC_PERPH_TYPE_REG			0x04
+#define VDAC_PERPH_SUBTYPE_REG			0x05
+
+#define VDAC_PERPH_TYPE_V1			0x37
+#define VDAC_PERPH_TYPE_V2			0x38
+
+#define VDAC_PERPH_SUBTYPE_COMMON		0x01
+
+#define VDAC_SILICON_V1_0			0x01
+#define VDAC_SILICON_V2_0			0x02
+
 #define VDAC_ENABLE_STATE_ON			0x80
 #define VDAC_ENABLE_STATE_OFF			0x00
 
@@ -54,8 +68,10 @@ static const struct vdac_data pmar2230_vdac_data = {
  * @iio_chn_vdac_n: Negative VADC channel (ATEST2)
  * @base: Base register address
  * @misc_base: Base address of misc register for ATEST switching
+ * @vout: Current DAC output value
  * @is_enabled: Current enable state
  * @vout_range: Current voltage range (full/half)
+ * @silicon_rev: Silicon revision (V1.0 or V2.0)
  * @lock: Mutex for state protection
  */
 
@@ -67,8 +83,10 @@ struct vdac_chip {
 	struct iio_channel *iio_chn_vdac_n;
 	u32 base;
 	u32 misc_base;
+	int vout;
 	u8 is_enabled;
 	int vout_range;
+	u8 silicon_rev;
 	struct mutex lock;
 };
 
@@ -103,16 +121,42 @@ static ssize_t vdac_enable_store(struct device *dev,
 		return len;
 	}
 
-	ret = regmap_write(vdac->regmap, vdac->base + VDAC_ENABLE_CTL,
-			   new_state ? VDAC_ENABLE_STATE_ON : VDAC_ENABLE_STATE_OFF);
+	if (new_state) {
+		/* Enable sequence depends on silicon revision */
+		if (vdac->silicon_rev == VDAC_SILICON_V2_0) {
+			/* V2.0 enable sequence: PA_LVL -> BIN_CODE -> ENABLE */
+			ret = regmap_write(vdac->regmap, vdac->base + VDAC_VDAC_PA_LVL_CTL,
+					   VDAC_PA_LVL_VALUE);
+			if (ret) {
+				dev_err(dev, "Error setting VDAC PA Level for V2.0: %d\n", ret);
+				return ret;
+			}
 
-	if (ret) {
-		dev_err(dev, "Error in %s VDAC module: %d\n",
-			new_state ? "enabling" : "disabling", ret);
-		return ret;
+			ret = regmap_write(vdac->regmap, vdac->base + VDAC_BIN_CODE_LB,
+					   vdac->vout);
+			if (ret) {
+				dev_err(dev, "Error setting BIN_CODE_LB during enable: %d\n",
+					ret);
+				return ret;
+			}
+		}
+
+		ret = regmap_write(vdac->regmap, vdac->base + VDAC_ENABLE_CTL,
+				   VDAC_ENABLE_STATE_ON);
+		if (ret) {
+			dev_err(dev, "Error in enabling VDAC module: %d\n", ret);
+			return ret;
+		}
+	} else {
+		ret = regmap_write(vdac->regmap, vdac->base + VDAC_ENABLE_CTL,
+				   VDAC_ENABLE_STATE_OFF);
+		if (ret) {
+			dev_err(dev, "Error in disabling VDAC module: %d\n", ret);
+			return ret;
+		}
 	}
-	vdac->is_enabled = new_state;
 
+	vdac->is_enabled = new_state;
 	return len;
 }
 
@@ -171,7 +215,7 @@ static ssize_t vdac_adc_readback_show(struct device *dev,
 	volt_diff = vdac_n_ref - vdac_p_ref;
 
 	dev_dbg(dev, "VDAC readback: P=%d mV, N=%d mV, diff(N-P)=%d mV\n",
-			vdac_n_ref, vdac_p_ref, volt_diff);
+			vdac_p_ref, vdac_n_ref, volt_diff);
 	ret = 0;
 
 cleanup:
@@ -198,21 +242,65 @@ static int vdac_write_raw(struct iio_dev *indio_dev,
 			dev_err(vdac->dev, "DAC value %d out of range (0-127)\n", val);
 			return -EINVAL;
 		}
-		if (!vdac->is_enabled) {
-			ret = regmap_write(vdac->regmap, vdac->base + VDAC_ENABLE_CTL,
-					   VDAC_ENABLE_STATE_ON);
+		vdac->vout = val;
+		if (vdac->silicon_rev == VDAC_SILICON_V2_0) {
+			/* V2.0: Can write anytime, auto-enable if needed */
+			if (!vdac->is_enabled) {
+				ret = regmap_write(vdac->regmap, vdac->base + VDAC_VDAC_PA_LVL_CTL,
+						   VDAC_PA_LVL_VALUE);
+				if (ret) {
+					dev_err(vdac->dev, "Error auto-setting VDAC %d\n",
+						ret);
+					return ret;
+				}
+
+				ret = regmap_write(vdac->regmap, vdac->base + VDAC_BIN_CODE_LB,
+						   val);
+				if (ret) {
+					dev_err(vdac->dev, "Error auto-setting VDAC %d\n",
+						ret);
+					return ret;
+				}
+
+				ret = regmap_write(vdac->regmap, vdac->base + VDAC_ENABLE_CTL,
+						   VDAC_ENABLE_STATE_ON);
+				if (ret) {
+					dev_err(vdac->dev, "Error auto-enabling VDAC: %d\n",
+						ret);
+					return ret;
+				}
+				vdac->is_enabled = 1;
+				dev_dbg(vdac->dev, "VDAC V2.0 auto-enabled for DAC write\n");
+			} else {
+				ret = regmap_write(vdac->regmap, vdac->base + VDAC_BIN_CODE_LB,
+						   val);
+				if (ret) {
+					dev_err(vdac->dev, "Error setting VDAC: %d\n",
+						ret);
+					return ret;
+				}
+			}
+		} else {
+			/* V1.0: Auto-enable if needed */
+			if (!vdac->is_enabled) {
+				ret = regmap_write(vdac->regmap, vdac->base + VDAC_ENABLE_CTL,
+						   VDAC_ENABLE_STATE_ON);
+				if (ret) {
+					dev_err(vdac->dev, "Error enabling VDAC %d\n",
+						ret);
+					return ret;
+				}
+				vdac->is_enabled = 1;
+				dev_dbg(vdac->dev, "VDAC V1.0 auto-enabled for DAC write\n");
+			}
+
+			ret = regmap_write(vdac->regmap, vdac->base + VDAC_BIN_CODE_LB,
+					   val);
 			if (ret) {
-				dev_err(vdac->dev, "Error auto-enabling VDAC module: %d\n", ret);
+				dev_err(vdac->dev, "Error setting VDAC %d\n",
+					ret);
 				return ret;
 			}
-			vdac->is_enabled = 1;
-			dev_dbg(vdac->dev, "VDAC auto-enabled for DAC write\n");
-		}
-
-		ret = regmap_write(vdac->regmap, vdac->base + VDAC_BIN_CODE_LB, val);
-		if (ret) {
-			dev_err(vdac->dev, "Error in setting the VDAC voltage: %d\n", ret);
-			return ret;
 		}
 
 		dev_dbg(vdac->dev, "VDAC value set to %d\n", val);
@@ -366,6 +454,7 @@ static int qcom_spmi_vdac_probe(struct platform_device *pdev)
 	struct regmap *regmap;
 	const struct vdac_data *data;
 	int ret;
+	unsigned int perph_type, perph_subtype;
 
 	regmap = dev_get_regmap(dev->parent, NULL);
 	if (!regmap)
@@ -384,7 +473,9 @@ static int qcom_spmi_vdac_probe(struct platform_device *pdev)
 	vdac->dev = dev;
 	vdac->data = data;
 	vdac->vout_range = VDAC_FULL_RANGE;
+	vdac->vout = 0;
 	vdac->is_enabled = 0;
+	vdac->silicon_rev = VDAC_SILICON_V1_0;
 	mutex_init(&vdac->lock);
 
 	vdac->base = data->base;
@@ -400,6 +491,30 @@ static int qcom_spmi_vdac_probe(struct platform_device *pdev)
 	if (IS_ERR(vdac->iio_chn_vdac_n)) {
 		dev_err(dev, "Failed to get IIO channel ATEST2\n");
 		return PTR_ERR(vdac->iio_chn_vdac_n);
+	}
+
+	ret = regmap_read(vdac->regmap, vdac->base + VDAC_PERPH_TYPE_REG, &perph_type);
+	if (ret) {
+		dev_err(dev, "Failed to read VDAC Peripheral Type: %d\n", ret);
+		return ret;
+	}
+	ret = regmap_read(vdac->regmap, vdac->base + VDAC_PERPH_SUBTYPE_REG, &perph_subtype);
+	if (ret) {
+		dev_err(dev, "Failed to read VDAC Peripheral Subtype: %d\n", ret);
+		return ret;
+	}
+
+	if (perph_type == VDAC_PERPH_TYPE_V2 && perph_subtype == VDAC_PERPH_SUBTYPE_COMMON) {
+		vdac->silicon_rev = VDAC_SILICON_V2_0;
+		dev_info(dev, "Detected VDAC silicon revision V2.0 (Type: 0x%x, Subtype: 0x%x)\n",
+				 perph_type, perph_subtype);
+	} else if (perph_type == VDAC_PERPH_TYPE_V1 && perph_subtype == VDAC_PERPH_SUBTYPE_COMMON) {
+		vdac->silicon_rev = VDAC_SILICON_V1_0;
+		dev_info(dev, "Detected VDAC silicon revision V1.0 (Type: 0x%x, Subtype: 0x%x)\n",
+				 perph_type, perph_subtype);
+	} else {
+		vdac->silicon_rev = VDAC_SILICON_V1_0;
+		dev_warn(dev, "Unknown VDAC silicon revision defaulting to V1.0\n");
 	}
 
 	indio_dev->dev.parent = dev;
