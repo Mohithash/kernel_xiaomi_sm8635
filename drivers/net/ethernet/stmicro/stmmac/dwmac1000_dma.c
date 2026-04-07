@@ -110,7 +110,8 @@ static void dwmac1000_dma_init(struct stmmac_priv *priv, void __iomem *ioaddr,
 	writel(DMA_INTR_DEFAULT_MASK, ioaddr + DMA_INTR_ENA);
 }
 
-static void dwmac1000_dma_init_rx(struct stmmac_priv *priv, void __iomem *ioaddr,
+static void dwmac1000_dma_init_rx(struct stmmac_priv *priv,
+				  void __iomem *ioaddr,
 				  struct stmmac_dma_cfg *dma_cfg,
 				  dma_addr_t dma_rx_phy, u32 chan)
 {
@@ -118,7 +119,8 @@ static void dwmac1000_dma_init_rx(struct stmmac_priv *priv, void __iomem *ioaddr
 	writel(lower_32_bits(dma_rx_phy), ioaddr + DMA_RCV_BASE_ADDR);
 }
 
-static void dwmac1000_dma_init_tx(struct stmmac_priv *priv, void __iomem *ioaddr,
+static void dwmac1000_dma_init_tx(struct stmmac_priv *priv,
+				  void __iomem *ioaddr,
 				  struct stmmac_dma_cfg *dma_cfg,
 				  dma_addr_t dma_tx_phy, u32 chan)
 {
