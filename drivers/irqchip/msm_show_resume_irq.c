@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2011, 2014-2016, 2018, 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/cpuidle.h>
@@ -15,6 +15,7 @@
 #include <linux/interrupt.h>
 #include <linux/irq.h>
 #include <linux/irqchip/arm-gic-v3.h>
+#include <trace/hooks/gic.h>
 #include <trace/hooks/gic_v3.h>
 #include <trace/hooks/cpuidle_psci.h>
 #include <linux/notifier.h>
@@ -48,6 +49,7 @@ static void gic_suspend_ds(void *data, struct gic_chip_data_v3 *gic_data)
 {
 	int i;
 	void __iomem *rdist_base = gic_data_rdist_sgi_base();
+	void __iomem *base = gic_data->dist_base;
 
 	gic_data_glb = gic_data;
 
@@ -67,10 +69,11 @@ static void gic_suspend_ds(void *data, struct gic_chip_data_v3 *gic_data)
 		gic_data_ds.irq_edg_lvl[i] = readl_relaxed(base + GICD_ICFGR + i * 4);
 }
 
-static void gic_resume_ds(struct gic_chip_data_v3 *gic_data)
+static void gic_resume_ds(void *arg, struct gic_chip_data_v3 *gic_data)
 {
 	int i;
 	void __iomem *rdist_base = gic_data_rdist_sgi_base();
+	void __iomem *base = gic_data->dist_base;
 
 	pr_info("Re-initializing gic in hibernation restore\n");
 	gic_v3_dist_init();
@@ -98,9 +101,6 @@ static void msm_show_resume_irqs(void)
 	u32 pending[32];
 	u32 gic_line_nr;
 	u32 typer;
-
-	if (unlikely(hibernation) || (pm_suspend_target_state == PM_SUSPEND_MEM))
-		gic_resume_ds(gic_data_glb);
 
 	if (!msm_show_resume_irq_mask)
 		return;
@@ -177,6 +177,7 @@ static int msm_show_resume_probe(struct platform_device *pdev)
 	register_syscore_ops(&gic_syscore_ops);
 	register_pm_notifier(&gic_notif_block);
 	register_trace_android_vh_gic_v3_suspend(gic_suspend_ds, NULL);
+	register_trace_android_vh_gic_resume(gic_resume_ds, NULL);
 	return 0;
 }
 
@@ -185,6 +186,9 @@ static int msm_show_resume_remove(struct platform_device *pdev)
 	unregister_trace_android_vh_cpuidle_psci_enter(gic_s2idle_enter, NULL);
 	unregister_trace_android_vh_cpuidle_psci_exit(gic_s2idle_exit, NULL);
 	unregister_syscore_ops(&gic_syscore_ops);
+	unregister_pm_notifier(&gic_notif_block);
+	unregister_trace_android_vh_gic_v3_suspend(gic_suspend_ds, NULL);
+	unregister_trace_android_vh_gic_resume(gic_resume_ds, NULL);
 	iounmap(base);
 	return 0;
 }
