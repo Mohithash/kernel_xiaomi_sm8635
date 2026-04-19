@@ -1210,7 +1210,7 @@ struct dma_buf *mem_buf_retrieve(struct mem_buf_retrieve_kernel_arg *arg)
 						     arg->vmids, arg->perms,
 						     arg->nr_acl_entries,
 						     qcom_sg_release,
-						     &buffer->kref);
+						     (void *)buffer);
 
 	exp_info.size = buffer->len;
 	exp_info.flags = arg->fd_flags;

@@ -50,21 +50,23 @@ mem_buf_dma_buf_export(struct dma_buf_export_info *exp_info,
  * Will not be freed by mem_buf_vmperm_free().
  */
 struct mem_buf_vmperm *mem_buf_vmperm_alloc(struct sg_table *sgt,
-	void (*release)(struct kref *), struct kref *kref);
+		void (*sg_release)(void *),
+		void *buffer);
 
 /*
  * A dmabuf which permantently belongs to the given VMs & permissions.
  */
 struct mem_buf_vmperm *mem_buf_vmperm_alloc_staticvm(struct sg_table *sgt, int *vmids, int *perms,
-		u32 nr_acl_entries, void (*release)(struct kref *), struct kref *);
+		u32 nr_acl_entries, void (*sg_release)(void *),
+		void *buffer);
 
 /*
  * A dmabuf in the "MEMACCEPT" state.
  */
 struct mem_buf_vmperm *mem_buf_vmperm_alloc_accept(struct sg_table *sgt,
 	gh_memparcel_handle_t memparcel_hdl, int *vmids, int *perms,
-	unsigned int nr_acl_entries, void (*release)(struct kref *),
-	struct kref *);
+	unsigned int nr_acl_entries, void (*sg_release)(void *),
+	void *buffer);
 
 /*
  * Attempt to return to the default security state. For memory in the
@@ -79,6 +81,15 @@ int mem_buf_vmperm_try_reclaim(struct mem_buf_vmperm *vmperm,
 
 /* kfree the vmperm object */
 void mem_buf_vmperm_free(struct mem_buf_vmperm *vmperm);
+
+/* Drop a reference to a mem_buf_vmperm.
+ *
+ * This is a wrapper to allows external code (like qcom_sg_ops.c)
+ * to drop reference to vmperm's kref, when the last reference is
+ * dropped vmperm and its associated buffer will be freed.
+ */
+
+void mem_buf_vmperm_put(struct mem_buf_vmperm *vmperm);
 
 /*
  * Pins ths permissions of the dmabuf.
