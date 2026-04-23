@@ -3645,7 +3645,7 @@ static struct critical_clk_offset critical_clk_list[] = {
 	{ .offset = 0x27004, .mask = BIT(0) },
 	{ .offset = 0x27020, .mask = BIT(0) },
 	{ .offset = 0xb2004, .mask = BIT(0) },
-	{ .offset = 0xb2004, .mask = BIT(0) },
+	{ .offset = 0xb2024, .mask = BIT(0) },
 	{ .offset = 0x71004, .mask = BIT(0) },
 	{ .offset = 0xb3004, .mask = BIT(0) },
 	{ .offset = 0xb3024, .mask = BIT(0) },
