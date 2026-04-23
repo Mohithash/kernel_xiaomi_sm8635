@@ -636,4 +636,10 @@ __traceiter_android_vh_cma_release_bypass
 __tracepoint_android_vh_cma_alloc_end
 __traceiter_android_vh_cma_alloc_end
 
+# nomap page manage
+folio_isolate_lru
+__tracepoint_android_vh_add_file_rmap
+__traceiter_android_vh_add_file_rmap
+__tracepoint_android_vh_remove_file_rmap
+__traceiter_android_vh_remove_file_rmap
 
