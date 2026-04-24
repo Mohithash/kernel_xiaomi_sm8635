@@ -10,6 +10,9 @@
 #include <linux/slab.h>
 #include <linux/delay.h>
 #include <linux/xarray.h>
+#include <linux/notifier.h>
+#include <linux/suspend.h>
+
 
 #include "si_core.h"
 #include "si_core_adci.h"
@@ -21,6 +24,7 @@
 #include <linux/qseecom_kernel.h>
 #endif
 
+static unsigned long long cookie;
 /* Static 'Primordial Object' operations. */
 
 #define OBJECT_OP_YIELD	1
@@ -87,10 +91,11 @@ static int next_arg_type(struct si_arg u[], int i, enum arg_type type)
 #define SI_OBJECT_ID_START		(SI_OBJECT_PRIMORDIAL + 1)
 #define SI_OBJECT_ID_END		(UINT_MAX)
 
-#define SET_SI_OBJECT(p, type, ...) __SET_SI_OBJECT(p, type, ##__VA_ARGS__, 0UL)
-#define __SET_SI_OBJECT(p, type, optr, ...) do { \
+#define SET_SI_OBJECT(p, type, ...) __SET_SI_OBJECT(p, type, ##__VA_ARGS__, 0UL, 0ULL)
+#define __SET_SI_OBJECT(p, type, optr, ocookie, ...) do { \
 		(p)->object_type = (type); \
 		(p)->info.object_ptr = (unsigned long)(optr); \
+		(p)->info.object_cookie = (unsigned long long)(ocookie); \
 		(p)->release = NULL; \
 	} while (0)
 
@@ -195,6 +200,17 @@ struct si_object *erase_si_object(u32 idx)
 	return xa_erase(&xa_si_objects, idx);
 }
 
+static void release_si_objects(void)
+{
+	unsigned long object_id;
+	struct si_object *object;
+
+	xa_for_each(&xa_si_objects, object_id, object) {
+		erase_si_object(object_id);
+		put_si_object(object);
+	}
+}
+
 static int __free_si_object(struct si_object *object)
 {
 	/* This is used by si-core itself if it requires to do cleanup on the
@@ -207,6 +223,8 @@ static int __free_si_object(struct si_object *object)
 
 	switch (typeof_si_object(object)) {
 	case SI_OT_USER:
+		if (object->info.object_cookie != cookie)
+			break;
 		release_user_object(object);
 		break;
 	case SI_OT_CB_OBJECT: {
@@ -336,7 +354,7 @@ static int init_si_object(struct si_object **object, unsigned int object_id)
 			/* "no-name"; it is not really a reason to fail here!. */
 			t_object->name = kasprintf(GFP_KERNEL, "qtee-%u", object_id);
 
-			SET_SI_OBJECT(t_object, SI_OT_USER, object_id);
+			SET_SI_OBJECT(t_object, SI_OT_USER, object_id, cookie);
 
 			*object = t_object;
 
@@ -884,6 +902,10 @@ int si_object_do_invoke(struct si_object_invoke_ctx *oic,
 		typeof_si_object(object) != SI_OT_ROOT)
 		return -EINVAL;
 
+	if (typeof_si_object(object) == SI_OT_USER &&
+		object->info.object_cookie != cookie)
+		return -EINVAL;
+
 	ret = si_object_invoke_ctx_init(oic, u);
 	if (ret)
 		return ret;
@@ -1304,6 +1326,38 @@ static ssize_t po_show(struct kobject *kobj, struct kobj_attribute *attr, char *
 
 	return len;
 }
+static int si_core_pm_freeze(void)
+{
+	adci_shutdown();
+	return 0;
+}
+
+static int si_core_pm_restore(void)
+{
+	cookie++;
+
+	release_si_objects();
+	adci_start();
+	return 0;
+}
+
+static int hibernate_pm_notifier(struct notifier_block *nb, unsigned long event, void *unused)
+{
+	switch (event) {
+	case (PM_HIBERNATION_PREPARE):
+		pr_info("SI_CORE: freeze\n");
+		si_core_pm_freeze();
+		break;
+	case (PM_POST_HIBERNATION):
+		pr_info("SI_CORE: restore\n");
+		si_core_pm_restore();
+		break;
+	default:
+		pr_debug("unhandled PM event: %lu\n", event);
+		break;
+	}
+	return NOTIFY_DONE;
+}
 
 /* Defined in si_core_async.c. */
 ssize_t release_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf);
@@ -1320,6 +1374,10 @@ static struct attribute *attrs[] = {
 
 static struct attribute_group attr_group = {
 	.attrs = attrs,
+};
+
+static struct notifier_block pm_nb = {
+	.notifier_call = hibernate_pm_notifier,
 };
 
 static struct kobject *si_core_kobj;
@@ -1345,6 +1403,9 @@ static int __init si_core_init(void)
 	}
 
 	adci_start();
+	ret = register_pm_notifier(&pm_nb);
+	if (ret)
+		pr_err("Failed to register nb: %d\n", ret);
 
 	return ret;
 }
@@ -1352,7 +1413,7 @@ static int __init si_core_init(void)
 static void __exit si_core_exit(void)
 {
 	/* TODO. Prevent unloading if 'xa_si_objects' is not empty. */
-
+	unregister_pm_notifier(&pm_nb);
 	adci_shutdown();
 	sysfs_remove_group(si_core_kobj, &attr_group);
 
