@@ -158,9 +158,38 @@ static int bcl_soc_remove(struct platform_device *pdev)
 	return 0;
 }
 
+static int bcl_soc_wait_for_thermal_zone(struct platform_device *pdev)
+{
+	struct thermal_zone_device *tz;
+	const char *zone_name;
+	int ret;
+
+	ret = of_property_read_string(pdev->dev.of_node,
+				      "qcom,defer-registration-until-zone",
+				      &zone_name);
+	if (ret == -EINVAL || ret == -ENODATA)
+		return 0;
+	if (ret)
+		return ret;
+
+	tz = thermal_zone_get_zone_by_name(zone_name);
+	if (IS_ERR(tz)) {
+		ret = PTR_ERR(tz);
+		if (ret == -ENODEV)
+			return -EPROBE_DEFER;
+		return ret;
+	}
+
+	return 0;
+}
+
 static int bcl_soc_probe(struct platform_device *pdev)
 {
 	int ret = 0;
+
+	ret = bcl_soc_wait_for_thermal_zone(pdev);
+	if (ret)
+		return ret;
 
 	bcl_perph = devm_kzalloc(&pdev->dev, sizeof(*bcl_perph), GFP_KERNEL);
 	if (!bcl_perph)

@@ -16,6 +16,7 @@
 #include <linux/slab.h>
 #include <linux/nvmem-consumer.h>
 #include <linux/ipc_logging.h>
+#include <linux/thermal.h>
 #include "thermal_zone_internal.h"
 #include "qti_bcl_common.h"
 
@@ -1064,6 +1065,31 @@ static void bcl_configure_bcl_peripheral(struct bcl_device *bcl_perph)
 	bcl_write_register(bcl_perph, BCL_MONITOR_EN, BIT(7));
 }
 
+static int bcl_wait_for_thermal_zone(struct platform_device *pdev)
+{
+	struct thermal_zone_device *tz;
+	const char *zone_name;
+	int ret;
+
+	ret = of_property_read_string(pdev->dev.of_node,
+				      "qcom,defer-registration-until-zone",
+				      &zone_name);
+	if (ret == -EINVAL || ret == -ENODATA)
+		return 0;
+	if (ret)
+		return ret;
+
+	tz = thermal_zone_get_zone_by_name(zone_name);
+	if (IS_ERR(tz)) {
+		ret = PTR_ERR(tz);
+		if (ret == -ENODEV)
+			return -EPROBE_DEFER;
+		return ret;
+	}
+
+	return 0;
+}
+
 static int bcl_remove(struct platform_device *pdev)
 {
 	int i = 0;
@@ -1084,6 +1110,10 @@ static int bcl_probe(struct platform_device *pdev)
 	struct bcl_device *bcl_perph = NULL;
 	char bcl_name[MAX_BCL_NAME_LENGTH];
 	int err = 0, ret = 0;
+
+	err = bcl_wait_for_thermal_zone(pdev);
+	if (err)
+		return err;
 
 	if (bcl_device_ct >= MAX_PERPH_COUNT) {
 		dev_err(&pdev->dev, "Max bcl peripheral supported already.\n");
