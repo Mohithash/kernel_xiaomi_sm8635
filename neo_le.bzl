@@ -35,6 +35,7 @@ def define_neo_le():
         "drivers/dma/qcom/pci-edma.ko",
         "drivers/edac/kryo_arm64_edac.ko",
         "drivers/edac/qcom_edac.ko",
+        "drivers/extcon/extcon-qcom-spmi-misc.ko",
         "drivers/firmware/qcom-scm.ko",
         "drivers/hwspinlock/qcom_hwspinlock.ko",
         "drivers/hwtracing/coresight/coresight.ko",
