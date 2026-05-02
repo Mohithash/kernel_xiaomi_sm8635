@@ -26,7 +26,6 @@ pinctrl-pineapple.ko
 pinctrl-cliffs.ko
 pinctrl-volcano.ko
 sched-walt.ko
-sched-walt-debug.ko
 thermal_pause.ko
 cpu_hotplug.ko
 clk-qcom.ko
@@ -63,7 +62,6 @@ gh_dbl.ko
 gh_mem_notifier.ko
 gh_msgq.ko
 gh_rm_drv.ko
-gunyah.ko
 gunyah_loader.ko
 gunyah_qcom.ko
 hwkm.ko
@@ -76,7 +74,6 @@ phy-qcom-ufs-qmp-v4-crow.ko
 phy-qcom-ufs-qmp-v4-pineapple.ko
 phy-qcom-ufs-qrbtc-sdm845.ko
 ufs_qcom.ko
-interconnect_qcom.ko
 icc-bcm-voter.ko
 icc-rpmh.ko
 qnoc-qos.ko
@@ -89,7 +86,6 @@ qcom_hwspinlock.ko
 smem.ko
 socinfo.ko
 spmi-pmic-arb.ko
-regmap-spmi.ko
 qti-regmap-debugfs.ko
 qcom-spmi-pmic.ko
 nvmem_qcom-spmi-sdam.ko
