@@ -2401,6 +2401,7 @@
   pci_release_region
   pci_remove_root_bus
   pci_request_region
+  pci_rescan_bus
   pci_restore_state
   pci_save_state
   pci_set_master
