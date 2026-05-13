@@ -69,6 +69,7 @@ ATOMIC_NOTIFIER_HEAD(pen_charge_state_notifier);
 #define WLS_FW_UPDATE_TIME_MS		1000
 #define WLS_FW_BUF_SIZE			128
 #define DEFAULT_RESTRICT_FCC_UA		1000000
+#define CHG_CTRL_LIMIT_INTERVAL_MS	5000
 
 #define CHG_DEBUG_DATA_LEN	200
 #define WIRELESS_CHIP_FW_VERSION_LEN	16
@@ -800,6 +801,9 @@ struct battery_chg_dev {
 	int				curr_wlsthermal_level;
 	int				curr_wls_quick_thermal_level;
 	int				num_thermal_levels;
+	int				chg_ctrl_last_idx;
+	int				chg_ctrl_last_mode;
+	int				fastcharge_mode_cache;
 	int				shutdown_volt_mv;
 	int				last_capacity;
 	bool				fast_update_temp;
@@ -814,6 +818,7 @@ struct battery_chg_dev {
 	struct delayed_work		batt_update_work;
 	struct delayed_work	    panel_notify_register_work;
 	struct delayed_work	    glink_crash_num_work;
+	struct delayed_work		chg_ctrl_limit_work;
 	bool				debug_work_en;
 	bool				glink_crash_timeout_reset_flag;
 	int				fake_soc;
@@ -2988,7 +2993,7 @@ static int battery_psy_set_charge_current(struct battery_chg_dev *bcdev,
 		return -EINVAL;
 	}
 
-	if (val < 0 || val > bcdev->num_thermal_levels)
+	if (val < 0 || val >= bcdev->num_thermal_levels)
 		return -EINVAL;
 	rc = write_property_id(bcdev, &bcdev->psy_list[PSY_TYPE_BATTERY],
 			BATT_CHG_CTRL_LIM, val);
@@ -2999,6 +3004,9 @@ static int battery_psy_set_charge_current(struct battery_chg_dev *bcdev,
 
 	return rc;
 }
+
+#include "qti_battery_charger_thermal_policy.h"
+
 
 static int battery_psy_set_fcc(struct battery_chg_dev *bcdev, u32 prop_id, int val)
 {
@@ -3080,7 +3088,9 @@ static int battery_psy_get_prop(struct power_supply *psy,
 		pval->intval = bcdev->curr_thermal_level;
 		break;
 	case POWER_SUPPLY_PROP_CHARGE_CONTROL_LIMIT_MAX:
-		pval->intval = bcdev->num_thermal_levels;
+		pval->intval = (bcdev->num_thermal_levels > 0)
+				? (bcdev->num_thermal_levels - 1)
+				: 0;
 		break;
 	case POWER_SUPPLY_PROP_STATUS:
 		pval->intval = pst->prop[prop_id];
@@ -3826,6 +3836,8 @@ static ssize_t fastcharge_enable_store(struct class *c,
         return -EINVAL;
     }
 
+	bcdev->fastcharge_mode_cache = mode;
+
     return count;
 }
 
@@ -3849,12 +3861,8 @@ static ssize_t fastcharge_enable_show(struct class *c,
         return rc;
     smart_chg = pst->prop[XM_PROP_SMART_CHG];
 
-    if (sport_mode == 1 && smart_chg == 8)
-        mode = 2;
-    else if (sport_mode == 0 && smart_chg == 8)
-        mode = 1;
-    else
-        mode = 0;
+	mode = battery_chg_calc_fastcharge_mode(sport_mode, smart_chg);
+	bcdev->fastcharge_mode_cache = mode;
 
     return scnprintf(buf, PAGE_SIZE, "%d\n", mode);
 }
@@ -5122,6 +5130,8 @@ static ssize_t smart_chg_store(struct class *c,
 				XM_PROP_SMART_CHG, val);
 	if (rc < 0)
 		return rc;
+
+	bcdev->fastcharge_mode_cache = -1;
 
 	return count;
 }
@@ -8843,6 +8853,8 @@ static ssize_t sport_mode_store(struct class *c,
 	if (rc < 0)
 		return rc;
 
+	bcdev->fastcharge_mode_cache = -1;
+
 	return count;
 }
 
@@ -10979,6 +10991,7 @@ static int battery_chg_probe(struct platform_device *pdev)
 	INIT_DELAYED_WORK( &bcdev->xm_smart_prop_update_work, generate_xm_smartchg_uvent);
 	INIT_DELAYED_WORK( &bcdev->batt_update_work, xm_batt_update_work);
 	INIT_DELAYED_WORK( &bcdev->glink_crash_num_work, xm_glink_crash_num_work);
+	INIT_DELAYED_WORK( &bcdev->chg_ctrl_limit_work, battery_chg_ctrl_limit_work);
 
 #if defined(CONFIG_OF) && defined(CONFIG_DRM_PANEL)
 	INIT_DELAYED_WORK(&bcdev->panel_notify_register_work, battery_register_panel_notifier_work);
@@ -11027,6 +11040,9 @@ static int battery_chg_probe(struct platform_device *pdev)
 	bcdev->restrict_fcc_ua = DEFAULT_RESTRICT_FCC_UA;
 	platform_set_drvdata(pdev, bcdev);
 	bcdev->fake_soc = -EINVAL;
+	bcdev->chg_ctrl_last_idx = -1;
+	bcdev->chg_ctrl_last_mode = -1;
+	bcdev->fastcharge_mode_cache = -1;
 	rc = battery_chg_init_psy(bcdev);
 	if (rc < 0)
 		goto error;
@@ -11067,6 +11083,7 @@ static int battery_chg_probe(struct platform_device *pdev)
 
 	schedule_delayed_work(&bcdev->charger_debug_info_print_work, 5 * HZ);
 	schedule_delayed_work(&bcdev->batt_update_work, 0);
+	schedule_delayed_work(&bcdev->chg_ctrl_limit_work, 0);
 #if defined(CONFIG_OF) && defined(CONFIG_DRM_PANEL)
 	schedule_delayed_work(&bcdev->panel_notify_register_work, msecs_to_jiffies(5000));
 #endif
@@ -11102,6 +11119,7 @@ error:
 	cancel_work_sync(&bcdev->usb_type_work);
 	cancel_work_sync(&bcdev->subsys_up_work);
 	cancel_work_sync(&bcdev->battery_check_work);
+	cancel_delayed_work_sync(&bcdev->chg_ctrl_limit_work);
 #if defined(CONFIG_OF) && defined(CONFIG_DRM_PANEL)
 	cancel_delayed_work_sync(&bcdev->panel_notify_register_work);
 #endif
@@ -11130,6 +11148,7 @@ static int battery_chg_remove(struct platform_device *pdev)
 	cancel_work_sync(&bcdev->subsys_up_work);
 	cancel_work_sync(&bcdev->usb_type_work);
 	cancel_work_sync(&bcdev->battery_check_work);
+	cancel_delayed_work_sync(&bcdev->chg_ctrl_limit_work);
 	unregister_reboot_notifier(&bcdev->reboot_notifier);
 	unregister_reboot_notifier(&bcdev->shutdown_notifier);
  #if defined(CONFIG_OF) && defined(CONFIG_DRM_PANEL)
