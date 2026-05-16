@@ -187,3 +187,7 @@ type 'struct wiphy' changed
   member 'u64 android_kabi_reserved1' was removed
   member 'union { struct { u16 hw_timestamp_max_peers; u16 android_kabi_reserve1; }; struct { u64 android_kabi_reserved1; }; union { }; }' was added
 
+type 'struct task_struct' changed
+  member 'u64 android_kabi_reserved3' was removed
+  member 'union { struct { unsigned int user_dumpable:1; }; struct { u64 android_kabi_reserved3; }; union { }; }' was added
+
