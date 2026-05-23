@@ -191,3 +191,12 @@ type 'struct task_struct' changed
   member 'u64 android_kabi_reserved3' was removed
   member 'union { struct { unsigned int user_dumpable:1; }; struct { u64 android_kabi_reserved3; }; union { }; }' was added
 
+type 'struct tcpm_port' changed
+  member 'struct pd_revision_info pd_rev' was added
+
+type 'enum pd_msg_request' changed
+  enumerator 'PD_MSG_DATA_REV' (6) was added
+
+type 'enum tcpm_ams' changed
+  enumerator 'REVISION_INFORMATION' (34) was added
+

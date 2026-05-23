@@ -233,6 +233,12 @@ DECLARE_HOOK(android_vh_look_around,
 DECLARE_HOOK(android_vh_mm_alloc_pages_direct_reclaim_enter,
 	TP_PROTO(unsigned int order),
 	TP_ARGS(order));
+DECLARE_HOOK(android_vh_mm_direct_reclaim_start,
+       TP_PROTO(u64 *stime),
+       TP_ARGS(stime));
+DECLARE_HOOK(android_vh_mm_direct_reclaim_end,
+       TP_PROTO(unsigned int order, u64 stime),
+       TP_ARGS(order, stime));
 DECLARE_HOOK(android_vh_mem_cgroup_charge,
 	TP_PROTO(struct folio *folio, struct mem_cgroup **memcg),
 	TP_ARGS(folio, memcg));
@@ -411,6 +417,12 @@ DECLARE_HOOK(android_vh_swap_writepage_end,
 	TP_PROTO(struct page *page, struct writeback_control *wbc,
 		unsigned long swap_writepage_start, int result),
 	TP_ARGS(page, wbc, swap_writepage_start, result));
+DECLARE_HOOK(android_vh_cma_alloc_lat_start,
+	TP_PROTO(unsigned long long *stime),
+	TP_ARGS(stime));
+DECLARE_HOOK(android_vh_cma_alloc_lat_end,
+	TP_PROTO(unsigned long long stime,unsigned long count),
+	TP_ARGS(stime,count));
 DECLARE_HOOK(android_vh_task_mem,
 	TP_PROTO(struct seq_file *m, struct mm_struct *mm),
 	TP_ARGS(m, mm));
@@ -426,6 +438,9 @@ DECLARE_HOOK(android_vh_alloc_pages_start,
 DECLARE_HOOK(android_vh_alloc_pages_end,
 	TP_PROTO(unsigned int order, gfp_t alloc_gfp, u64 stime),
 	TP_ARGS(order, alloc_gfp, stime));
+DECLARE_HOOK(android_vh_do_group_exit,
+	TP_PROTO(struct task_struct *tsk),
+	TP_ARGS(tsk));
 DECLARE_HOOK(android_vh_alloc_pages_slowpath_start,
 	TP_PROTO(u64 *stime),
 	TP_ARGS(stime));
@@ -447,6 +462,16 @@ DECLARE_HOOK(android_vh_add_file_rmap,
 DECLARE_HOOK(android_vh_remove_file_rmap,
 	TP_PROTO(struct page *page, bool compound),
 	TP_ARGS(page, compound));
+DECLARE_HOOK(android_vh_folio_end_writeback,
+	TP_PROTO(struct folio *folio),
+	TP_ARGS(folio));
+DECLARE_HOOK(android_vh_folio_start_writeback,
+	TP_PROTO(struct folio *folio),
+	TP_ARGS(folio));
+DECLARE_HOOK(android_vh_cma_alloc_bypass,
+	TP_PROTO(struct cma *cma, unsigned long count, unsigned int align,
+		gfp_t gfp_mask, struct page **page, bool *bypass),
+	TP_ARGS(cma, count, align, gfp_mask, page, bypass));
 #endif /* _TRACE_HOOK_MM_H */
 
 /* This part must be outside protection */
