@@ -313,6 +313,50 @@ struct msm_geni_i3c_rsc {
 	enum geni_se_protocol_type proto;
 };
 
+/**
+ * struct geni_i3c_dev - GENI I3C master device structure.
+ * @se: GENI serial engine instance.
+ * @tx_wm: TX watermark level.
+ * @irq: IRQ number for the GENI SE.
+ * @err: Error status for the current transfer.
+ * @se_mode: GENI SE mode configuration.
+ * @ctrlr: I3C master controller instance.
+ * @ipcl: IPC logging handle.
+ * @ipc_log_kpi: KPI IPC logging handle.
+ * @i3c_kpi: KPI enable flag.
+ * @done: Completion for transfer completion.
+ * @lock: Mutex for transfer serialization.
+ * @i3c_ibi_lock: Mutex for IBI master request handling.
+ * @gsi: GSI common data.
+ * @rx_phy: RX DMA physical address.
+ * @gsi_err: GSI error flag.
+ * @cfg_sent: GSI configuration sent flag.
+ * @spinlock: Spinlock protecting critical sections.
+ * @clk_src_freq: Clock source frequency.
+ * @dfs_idx: Dynamic frequency scaling index.
+ * @prev_dfs_idx: Previous dynamic frequency scaling index.
+ * @cur_buf: Current transfer buffer.
+ * @cur_rnw: Transfer direction (read or write).
+ * @cur_len: Current transfer length in bytes.
+ * @cur_idx: Current buffer index.
+ * @num_xfers: Number of transfers in the current sequence.
+ * @newaddrslots: Bitmap of dynamic address slots.
+ * @clk_fld: Clock field for push‑pull mode.
+ * @clk_od_fld: Clock field for open‑drain mode.
+ * @ibi: IBI configuration.
+ * @hj_wq: Workqueue for Hot‑Join handling.
+ * @hj_wd: Work item for Hot‑Join.
+ * @hj_wl: Wakeup source for Hot‑Join.
+ * @i3c_gpio_disable: GPIO state for I3C disable mode.
+ * @ver_info: I3C version information.
+ * @i3c_rsc: I3C resource tracking.
+ * @wrapper_dev: Wrapper device.
+ * @is_shared: GENI resource sharing flag.
+ * @is_i2c_xfer: I2C transfer flag.
+ * @is_deep_sleep: Flag to be used for deep sleep entry/exit.
+ * @is_daa_done_for_hotjoin: Flag to track first Hotjoin after Deep sleep.
+ */
+
 struct geni_i3c_dev {
 	struct geni_se se;
 	unsigned int tx_wm;
@@ -325,11 +369,11 @@ struct geni_i3c_dev {
 	int i3c_kpi;
 	struct completion done;
 	struct mutex lock;
-	struct mutex i3c_ibi_lock; /* ibi master request lock */
+	struct mutex i3c_ibi_lock;
 	struct gsi_common gsi;
 	dma_addr_t rx_phy;
 	bool gsi_err;
-	bool cfg_sent; /* gsi config sent flag */
+	bool cfg_sent;
 	spinlock_t spinlock;
 	u32 clk_src_freq;
 	u32 dfs_idx;
@@ -351,7 +395,9 @@ struct geni_i3c_dev {
 	struct msm_geni_i3c_rsc i3c_rsc;
 	struct device *wrapper_dev;
 	bool is_shared;
-	bool is_i2c_xfer; /* i2c transfer flag */
+	bool is_i2c_xfer;
+	bool is_deep_sleep;
+	bool is_daa_done_for_hotjoin;
 };
 
 struct geni_i3c_i2c_dev_data {
@@ -1800,11 +1846,18 @@ static void geni_i3c_hotjoin(struct work_struct *work)
 					     gi3c->i3c_kpi);
 	pm_stay_awake(gi3c->se.dev);
 
+	if (gi3c->is_deep_sleep)
+		gi3c->is_daa_done_for_hotjoin = true;
+
 	ret = i3c_master_do_daa(&gi3c->ctrlr);
 	if (ret)
 		I3C_LOG_ERR(gi3c->ipcl, true, gi3c->se.dev, "hotjoin:daa failed %d\n", ret);
 
 	pm_relax(gi3c->se.dev);
+
+	/* Set to false for subsequent DS and QB flow */
+	if (gi3c->is_deep_sleep)
+		gi3c->is_daa_done_for_hotjoin = false;
 
 	geni_capture_stop_time(&gi3c->se, gi3c->ipc_log_kpi, __func__,
 			       gi3c->i3c_kpi, start_time, 0, 0);
@@ -3882,10 +3935,130 @@ static int geni_i3c_enable_regulator(struct geni_i3c_dev *gi3c,
 	return ret;
 }
 
+static void geni_i3c_bus_set_addr_slot_status(struct i3c_bus *bus, u16 addr,
+					      enum i3c_addr_slot_status status)
+{
+	int bitpos = addr * 2;
+	unsigned long *ptr;
+
+	if (addr > I2C_MAX_ADDR)
+		return;
+
+	ptr = bus->addrslots + (bitpos / BITS_PER_LONG);
+	*ptr &= ~((unsigned long)I3C_ADDR_SLOT_STATUS_MASK <<
+			(bitpos % BITS_PER_LONG));
+	*ptr |= (unsigned long)status << (bitpos % BITS_PER_LONG);
+}
+
+int geni_i3c_send_rstdaa(struct i3c_master_controller *master, u8 addr)
+{
+	struct i3c_ccc_cmd_dest dest;
+	struct i3c_ccc_cmd cmd;
+
+	dest.addr = addr;
+	dest.payload.len = 0;
+	dest.payload.data = NULL;
+
+	cmd.rnw = 0;
+	cmd.id = I3C_CCC_RSTDAA(true);
+	cmd.dests = &dest;
+	cmd.ndests = 1;
+	cmd.err = I3C_ERROR_UNKNOWN;
+
+	return  geni_i3c_master_send_ccc_cmd(master, &cmd);
+}
+
+static void geni_i3c_configure_fifo_mode(struct geni_i3c_dev *gi3c)
+{
+	u32 tx_depth;
+
+	tx_depth = geni_se_get_tx_fifo_depth(&gi3c->se);
+	gi3c->tx_wm = tx_depth - 1;
+	geni_se_init(&gi3c->se, gi3c->tx_wm, tx_depth);
+	geni_se_config_packing(&gi3c->se, BITS_PER_BYTE, PACKING_BYTES_PW,
+			       true, true, true);
+	I3C_LOG_DBG(gi3c->ipcl, false, gi3c->se.dev,
+		    "i3c fifo/se-dma mode. fifo depth:%u mode=%d\n",
+		     tx_depth, gi3c->se_mode);
+}
+
+static int geni_i3c_quick_boot_config(struct geni_i3c_dev *gi3c)
+{
+	struct i3c_master_controller *master = &gi3c->ctrlr;
+	struct i3c_dev_boardinfo *i3cboardinfo = NULL;
+	struct i3c_bus *bus = i3c_master_get_bus(master);
+	struct platform_device *pdev;
+	u32 se_mode, proto;
+	int ret;
+
+	pdev = to_platform_device(gi3c->se.dev);
+
+	if (gi3c->se_mode == GENI_SE_INVALID) {
+		proto = geni_se_common_get_proto(gi3c->se.base);
+		if (proto != GENI_SE_I3C) {
+			I3C_LOG_ERR(gi3c->ipcl, false, gi3c->se.dev,
+				    "Invalid proto %d\n", proto);
+			return -ENXIO;
+		}
+
+		se_mode = geni_read_reg(gi3c->se.base, GENI_IF_DISABLE_RO);
+		if (se_mode) {
+			gi3c->se_mode = GENI_GPI_DMA;
+			geni_se_select_mode(&gi3c->se, GENI_GPI_DMA);
+			I3C_LOG_DBG(gi3c->ipcl, false, gi3c->se.dev, "I3C in GSI ONLY mode\n");
+		}
+	}
+
+	/* Reconfigure I3C and IBI controller*/
+	qcom_geni_i3c_conf(gi3c, OPEN_DRAIN_MODE);
+	geni_i3c_config_od_mode_freq(gi3c, bus->scl_rate.i2c);
+	msm_qup_write(gi3c->ibi.ctrl_id, TLMM_I3C_MODE);
+	qcom_geni_i3c_ibi_conf(gi3c);
+
+	if (gi3c->se_mode != GENI_GPI_DMA)
+		geni_i3c_configure_fifo_mode(gi3c);
+
+	gi3c->is_deep_sleep = false;
+
+	list_for_each_entry(i3cboardinfo, &master->boardinfo.i3c, node) {
+		if (i3cboardinfo->init_dyn_addr && i3cboardinfo->init_dyn_addr < I3C_MAX_ADDR) {
+			geni_i3c_bus_set_addr_slot_status(&master->bus, i3cboardinfo->init_dyn_addr,
+							  I3C_ADDR_SLOT_FREE);
+				I3C_LOG_DBG(gi3c->ipcl, false, gi3c->se.dev,
+					    "Freed dynamic address slot: 0x%02x\n",
+					    i3cboardinfo->init_dyn_addr);
+		}
+	}
+
+	if (!gi3c->is_daa_done_for_hotjoin) {
+		/*
+		 * After deep sleep, slaves may retain stale dynamic addresses while controller
+		 * loses state. So Send RSTDAA to release all the previous assigned addresses and
+		 * start DAA newly
+		 */
+		ret = geni_i3c_send_rstdaa(&gi3c->ctrlr, I3C_BROADCAST_ADDR);
+		if (ret) {
+			I3C_LOG_ERR(gi3c->ipcl, true, gi3c->se.dev, "rstdaa failed %d\n", ret);
+			return ret;
+		}
+
+		ret = i3c_master_do_daa(&gi3c->ctrlr);
+		if (ret) {
+			I3C_LOG_ERR(gi3c->ipcl, true, gi3c->se.dev, "do daa failed %d\n", ret);
+			return ret;
+		}
+
+		/* Enable hot join irq */
+		geni_i3c_enable_hotjoin_irq(gi3c, true);
+	}
+
+	return 0;
+}
+
 static int geni_i3c_probe(struct platform_device *pdev)
 {
 	struct geni_i3c_dev *gi3c;
-	u32 proto, tx_depth;
+	u32 proto;
 	int ret;
 	u32 se_mode, geni_ios;
 
@@ -3996,14 +4169,7 @@ static int geni_i3c_probe(struct platform_device *pdev)
 	} else {
 		/* shared SE is not allowed for non GSI Mode. */
 		gi3c->is_shared = false;
-		tx_depth = geni_se_get_tx_fifo_depth(&gi3c->se);
-		gi3c->tx_wm = tx_depth - 1;
-		geni_se_init(&gi3c->se, gi3c->tx_wm, tx_depth);
-		geni_se_config_packing(&gi3c->se, BITS_PER_BYTE, PACKING_BYTES_PW,
-				       true, true, true);
-		I3C_LOG_DBG(gi3c->ipcl, false, gi3c->se.dev,
-			    "i3c fifo/se-dma mode. fifo depth:%d mode=%d\n",
-			    tx_depth, gi3c->se_mode);
+		geni_i3c_configure_fifo_mode(gi3c);
 	}
 
 	geni_ios = geni_read_reg(gi3c->se.base, SE_GENI_IOS);
@@ -4011,6 +4177,9 @@ static int geni_i3c_probe(struct platform_device *pdev)
 		I3C_LOG_ERR(gi3c->ipcl, false, gi3c->se.dev,
 		"%s: IO lines:0x%x, Ensure bus power up\n", __func__, geni_ios);
 	}
+
+	gi3c->is_deep_sleep = false;
+	gi3c->is_daa_done_for_hotjoin = false;
 
 	ret = geni_se_resources_off(&gi3c->se);
 	if (ret)
@@ -4121,7 +4290,10 @@ static int geni_i3c_resume_early(struct device *dev)
 {
 	struct geni_i3c_dev *gi3c = dev_get_drvdata(dev);
 	unsigned long long start_time;
+	struct platform_device *pdev;
+	u32 proto;
 
+	pdev = to_platform_device(gi3c->se.dev);
 	start_time = geni_capture_start_time(&gi3c->se, gi3c->ipc_log_kpi, __func__,
 					     gi3c->i3c_kpi);
 
@@ -4131,6 +4303,20 @@ static int geni_i3c_resume_early(struct device *dev)
 				"%s:  NAON clock failure\n", __func__);
 			return -EAGAIN;
 		}
+	}
+
+	if (pm_suspend_target_state == PM_SUSPEND_MEM) {
+		gi3c->se_mode = GENI_SE_INVALID;
+		gi3c->is_deep_sleep = true;
+		proto = geni_se_common_get_proto(gi3c->se.base);
+		if (proto != GENI_SE_I3C) {
+			I3C_LOG_ERR(gi3c->ipcl, false, gi3c->se.dev,
+				    "Invalid proto %d\n", proto);
+			return -ENXIO;
+		}
+
+		qcom_geni_i3c_ibi_conf(gi3c);
+		geni_i3c_enable_hotjoin_irq(gi3c, true);
 	}
 
 	geni_capture_stop_time(&gi3c->se, gi3c->ipc_log_kpi, __func__,
@@ -4152,10 +4338,24 @@ static int geni_i3c_gpi_pause_resume(struct geni_i3c_dev *gi3c, bool is_suspend)
 	int tx_ret = 0;
 
 	if (gi3c->gsi.tx.ch) {
-		if (is_suspend)
+		if (is_suspend) {
 			tx_ret = dmaengine_pause(gi3c->gsi.tx.ch);
-		else
+		} else {
+			/*
+			 * For deep sleep need to restore the config similar to the probe,
+			 * hence using MSM_GPI_DEEP_SLEEP_INIT flag, in gpi_resume it will
+			 * do similar to the probe. After this we should set this flag to
+			 * MSM_GPI_DEFAULT, means gpi probe state is restored.
+			 */
+			if (gi3c->is_deep_sleep)
+				gi3c->gsi.tx.ev.cmd = MSM_GPI_DEEP_SLEEP_INIT;
+
 			tx_ret = dmaengine_resume(gi3c->gsi.tx.ch);
+			if (gi3c->is_deep_sleep) {
+				gi3c->gsi.tx.ev.cmd = MSM_GPI_DEFAULT;
+				gi3c->is_deep_sleep = false;
+			}
+		}
 
 		if (tx_ret) {
 			I3C_LOG_ERR(gi3c->ipcl, false, gi3c->se.dev,
@@ -4226,7 +4426,7 @@ static int geni_i3c_runtime_resume(struct device *dev)
 	if (ret) {
 		I3C_LOG_ERR(gi3c->ipcl, false, gi3c->se.dev,
 			"%s geni_se_resources_on failed %d\n", __func__, ret);
-		return ret;
+		goto cleanup_icc_init;
 	}
 
 	geni_write_reg(0x7f, gi3c->se.base, GENI_OUTPUT_CTRL);
@@ -4240,15 +4440,35 @@ static int geni_i3c_runtime_resume(struct device *dev)
 		if (ret) {
 			I3C_LOG_ERR(gi3c->ipcl, false, gi3c->se.dev,
 				    "%s: ret:%d\n", __func__, ret);
-			return ret;
+			goto geni_resources_off;
 		}
 	}
 	I3C_LOG_DBG(gi3c->ipcl, false, gi3c->se.dev, "%s(): ret:%d\n",
 			__func__, ret);
+	if (gi3c->is_deep_sleep) {
+		ret = geni_i3c_quick_boot_config(gi3c);
+		if (ret) {
+			I3C_LOG_ERR(gi3c->ipcl, false, gi3c->se.dev,
+				    "%s geni_i3c_quick_boot_config failed %d\n", __func__, ret);
+			goto geni_resources_off;
+		}
+	}
 	/* Enable TLMM I3C MODE registers */
 	geni_capture_stop_time(&gi3c->se, gi3c->ipc_log_kpi, __func__,
 			       gi3c->i3c_kpi, start_time, 0, 0);
 	return 0;
+
+geni_resources_off:
+	ret = geni_se_resources_off(&gi3c->se);
+	if (ret)
+		I3C_LOG_ERR(gi3c->ipcl, true, gi3c->se.dev,
+			    "%s: geni_se_resources_off failed%d\n", __func__, ret);
+cleanup_icc_init:
+	ret = geni_icc_disable(&gi3c->se);
+	if (ret)
+		I3C_LOG_ERR(gi3c->ipcl, true, gi3c->se.dev,
+			    "%s: geni_icc_disable failed%d\n", __func__, ret);
+	return ret;
 }
 
 static int geni_i3c_suspend_late(struct device *dev)

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: ISC
 /*
  * Copyright 2002-2005, Instant802 Networks, Inc.
  * Copyright 2005-2006, Devicescape Software, Inc.
@@ -478,6 +479,7 @@ struct reg_regdb_apply_request {
 	const struct ieee80211_regdomain *regdom;
 };
 
+#if IS_ENABLED(CONFIG_CORE_REGDB)
 static LIST_HEAD(reg_regdb_apply_list);
 static DEFINE_MUTEX(reg_regdb_apply_mutex);
 
@@ -523,6 +525,7 @@ static int reg_schedule_apply(const struct ieee80211_regdomain *regdom)
 	schedule_work(&reg_regdb_work);
 	return 0;
 }
+#endif
 
 #ifdef CONFIG_CFG80211_CRDA_SUPPORT
 /* Max number of consecutive attempts to communicate with CRDA  */
@@ -602,6 +605,7 @@ static inline int call_crda(const char *alpha2)
 /* code to directly load a firmware database through request_firmware */
 static const struct fwdb_header *regdb;
 
+#if IS_ENABLED(CONFIG_CORE_REGDB)
 struct fwdb_country {
 	u8 alpha2[2];
 	__be16 coll_ptr;
@@ -959,7 +963,6 @@ int reg_query_regdb_wmm(char *alpha2, int freq, struct ieee80211_reg_rule *rule)
 
 	return -ENODATA;
 }
-EXPORT_SYMBOL(reg_query_regdb_wmm);
 
 static int regdb_query_country(const struct fwdb_header *db,
 			       const struct fwdb_country *country)
@@ -1156,6 +1159,33 @@ out_unlock:
 	release_firmware(fw);
 	return err;
 }
+
+#else
+static int query_regdb_file(const char *alpha2)
+{
+	return -ENODATA;
+}
+
+int reg_reload_regdb(void)
+{
+	return -ENOENT;
+}
+
+static int __init load_builtin_regdb_keys(void)
+{
+	return 0;
+}
+
+static void free_regdb_keyring(void)
+{
+}
+
+int reg_query_regdb_wmm(char *alpha2, int freq, struct ieee80211_reg_rule *rule)
+{
+	return -ENODATA;
+}
+#endif /* CONFIG_CORE_REGDB */
+EXPORT_SYMBOL_GPL(reg_query_regdb_wmm);
 
 static bool reg_query_database(struct regulatory_request *request)
 {

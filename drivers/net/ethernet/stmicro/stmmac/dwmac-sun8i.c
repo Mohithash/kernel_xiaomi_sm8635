@@ -442,8 +442,10 @@ static int sun8i_dwmac_dma_interrupt(struct stmmac_priv *priv,
 				     struct stmmac_extra_stats *x, u32 chan,
 				     u32 dir)
 {
-	u32 v;
+	struct stmmac_rxq_stats *rxq_stats = &priv->xstats.rxq_stats[chan];
+	struct stmmac_txq_stats *txq_stats = &priv->xstats.txq_stats[chan];
 	int ret = 0;
+	u32 v;
 
 	v = readl(ioaddr + EMAC_INT_STA);
 
@@ -454,7 +456,9 @@ static int sun8i_dwmac_dma_interrupt(struct stmmac_priv *priv,
 
 	if (v & EMAC_TX_INT) {
 		ret |= handle_tx;
-		x->tx_normal_irq_n++;
+		u64_stats_update_begin(&txq_stats->syncp);
+		txq_stats->tx_normal_irq_n++;
+		u64_stats_update_end(&txq_stats->syncp);
 	}
 
 	if (v & EMAC_TX_DMA_STOP_INT)
@@ -476,7 +480,9 @@ static int sun8i_dwmac_dma_interrupt(struct stmmac_priv *priv,
 
 	if (v & EMAC_RX_INT) {
 		ret |= handle_rx;
-		x->rx_normal_irq_n++;
+		u64_stats_update_begin(&rxq_stats->syncp);
+		rxq_stats->rx_normal_irq_n++;
+		u64_stats_update_end(&rxq_stats->syncp);
 	}
 
 	if (v & EMAC_RX_BUF_UA_INT)

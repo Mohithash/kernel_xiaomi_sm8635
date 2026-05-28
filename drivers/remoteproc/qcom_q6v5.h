@@ -44,6 +44,7 @@ struct qcom_q6v5 {
 	struct rproc_subdev *ssr_subdev;
 
 	struct work_struct crash_handler;
+	struct work_struct symbol_loader;
 
 	bool handover_issued;
 
@@ -53,6 +54,8 @@ struct qcom_q6v5 {
 	struct completion ping_done;
 
 	int crash_reason;
+	int crash_stack;
+	unsigned int smem_host_id;
 
 	bool running;
 
@@ -66,7 +69,8 @@ struct qcom_q6v5 {
 int ping_subsystem(struct qcom_q6v5 *q6v5);
 int ping_subsystem_init(struct qcom_q6v5 *q6v5, struct platform_device *pdev);
 int qcom_q6v5_init(struct qcom_q6v5 *q6v5, struct platform_device *pdev,
-		   struct rproc *rproc, int crash_reason, bool early_boot,
+		   struct rproc *rproc, int crash_reason, int crash_stack,
+		unsigned int smem_host_id, bool early_boot,
 		   void (*handover)(struct qcom_q6v5 *q6v5));
 void qcom_q6v5_register_ssr_subdev(struct qcom_q6v5 *q6v5, struct rproc_subdev *ssr_subdev);
 int qcom_q6v5_prepare(struct qcom_q6v5 *q6v5);

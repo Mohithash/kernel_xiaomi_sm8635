@@ -49,6 +49,10 @@ if (print) { \
 
 #define DEFAULT_BUS_WIDTH	(4)
 
+#define	GENI_SE_QSPI		0x9
+
+#define IMMEDIATE_DMA_LEN	8
+
 /* In KHz */
 #define DEFAULT_SE_CLK	19200
 #define SPI_CORE2X_VOTE	51000
@@ -201,6 +205,13 @@ struct geni_se_rsc {
 	struct geni_se *se_rsc;
 	struct se_rsc_ssr rsc_ssr;
 };
+
+#define TOTAL_VOTE_INDEX		3
+#define VOTE_INDEX_PROP_NAME		"qcom,vote-index"
+#define GENI_TO_CORE_VOTE_PROP_NAME	"qcom,geni-to-core-vote"
+#define CPU_TO_GENI_VOTE_PROP_NAME	"qcom,cpu-to-geni-vote"
+#define GENI_TO_DDR_VOTE_PROP_NAME	"qcom,geni-to-ddr-vote"
+#define INVALID_VOTE			0xFFFFFFFF
 
 /**
  * struct kpi_time - Help to capture KPI information

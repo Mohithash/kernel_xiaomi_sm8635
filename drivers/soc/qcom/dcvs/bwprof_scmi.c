@@ -426,8 +426,7 @@ CONFIGFS_ATTR(bwprof_, enable_config);
 
 static ssize_t monitor_data_show(char *page, int master_idx, u32 hw_type)
 {
-	struct bwprof_hw_group  *hw_node = bwprof_data->hw_node[hw_type];
-	u32 bus_width = hw_node->bus_width;
+	u32 bus_width = bwprof_data->hw_node[hw_type]->bus_width;
 	int cnt = 0;
 	int i;
 	int num_samples_to_read = (MAX_NUM_SAMPLES / bwprof_data->sample_ms);
@@ -438,6 +437,8 @@ static ssize_t monitor_data_show(char *page, int master_idx, u32 hw_type)
 
 	spin_lock_irqsave(&bwprof_data->rx_lock, flags);
 	for (i = 0; i < num_samples_to_read; i++) {
+		if (hw_type == BWPROF_LLCC)
+			monitor_data[i].mem_freq = LLCC_FREQ_ZERO;
 		cnt += scnprintf(page + cnt, PAGE_SIZE - cnt, "%llu\t%u\t%u\t%u\n",
 				monitor_data[i].ts,
 				monitor_data[i].meas_mbps[master_idx],
@@ -696,7 +697,7 @@ static void trace_event(void)
 			bus_width = bwprof_data->hw_node[BWPROF_DDR]->bus_width;
 	} else {
 		if (bwprof_data->hw_node[BWPROF_LLCC])
-			bus_width = bwprof_data->hw_node[BWPROF_LLCC]->bus_width;
+			monitor_data[0].mem_freq = LLCC_FREQ_ZERO;
 	}
 
 	if (!bwprof_data->is_hist_enable) {

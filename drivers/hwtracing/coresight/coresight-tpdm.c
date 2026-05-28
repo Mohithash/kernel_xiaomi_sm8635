@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022, 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/kernel.h>
@@ -4314,7 +4314,7 @@ static int tpdm_suspend(struct device *dev)
 {
 	struct tpdm_drvdata *drvdata = dev_get_drvdata(dev);
 
-	if (pm_suspend_via_firmware())
+	if (pm_suspend_target_state == PM_SUSPEND_MEM)
 		coresight_disable(drvdata->csdev);
 
 	return 0;

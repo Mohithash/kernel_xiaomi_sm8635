@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <asm/div64.h>
@@ -488,8 +488,8 @@ static int commit_crm(struct bcm_voter *voter)
 				return ret;
 			}
 
-			ret = crm_write_bw_vote(crm->dev, crm->client_type,
-						crm->client_idx, &crm_cmd);
+			ret = crm_write_bw_pt_vote(crm->dev, crm->client_type,
+						   crm->client_idx, &crm_cmd);
 			if (ret) {
 				pr_err("Error writing crm bw: ret=%d\n", ret);
 				return ret;

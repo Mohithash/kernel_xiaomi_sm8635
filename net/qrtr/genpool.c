@@ -97,6 +97,7 @@ struct qrtr_genpool_pipe {
  * @irq_setup: IRQ for signaling completion of fifo setup
  * @irq_setup_label: IRQ name for irq_setup
  * @setup_work: worker to maintain shared memory between edges
+ * @setup_lock: lock for setup and cleanup
  * @irq_xfer: IRQ for incoming transfers
  * @irq_xfer_label: IRQ name for irq_xfer
  * @state: current state of the local side
@@ -126,6 +127,7 @@ struct qrtr_genpool_dev {
 	int irq_setup;
 	char irq_setup_label[LABEL_SIZE];
 	struct work_struct setup_work;
+	struct mutex setup_lock; /* lock for setup and cleanup */
 
 	int irq_xfer;
 	char irq_xfer_label[LABEL_SIZE];
@@ -594,6 +596,7 @@ static void qrtr_genpool_setup_work(struct work_struct *work)
 	u32 state_next;
 	int rc;
 
+	mutex_lock(&qdev->setup_lock);
 	spin_lock_irqsave(&qdev->lock, flags);
 	switch (qdev->state) {
 	case LOCAL_STATE_DEFAULT:
@@ -608,6 +611,7 @@ static void qrtr_genpool_setup_work(struct work_struct *work)
 	case LOCAL_STATE_PREPARE_REBOOT:
 		qrtr_genpool_set_state(qdev, LOCAL_STATE_REBOOT);
 		spin_unlock_irqrestore(&qdev->lock, flags);
+		mutex_unlock(&qdev->setup_lock);
 		wake_up_all(&qdev->state_wait);
 		return;
 	case LOCAL_STATE_REBOOT:
@@ -629,7 +633,7 @@ static void qrtr_genpool_setup_work(struct work_struct *work)
 
 	rc = qrtr_genpool_memory_alloc(qdev);
 	if (rc)
-		return;
+		goto setup_unlock;
 
 	qrtr_genpool_fifo_init(qdev);
 
@@ -637,7 +641,7 @@ static void qrtr_genpool_setup_work(struct work_struct *work)
 	rc = qrtr_endpoint_register(&qdev->ep, QRTR_EP_NET_ID_AUTO, false, NULL);
 	if (rc) {
 		dev_err(qdev->dev, "failed to register qrtr endpoint rc%d\n", rc);
-		return;
+		goto setup_unlock;
 	}
 	qdev->ep_registered = true;
 
@@ -650,6 +654,8 @@ state_change:
 
 unlock:
 	spin_unlock_irqrestore(&qdev->lock, flags);
+setup_unlock:
+	mutex_unlock(&qdev->setup_lock);
 }
 
 static int qrtr_genpool_reboot_cb(struct notifier_block *nb,
@@ -659,19 +665,40 @@ static int qrtr_genpool_reboot_cb(struct notifier_block *nb,
 	unsigned long flags;
 	int rc;
 
+	mutex_lock(&qdev->setup_lock);
 	cancel_work_sync(&qdev->setup_work);
 
 	spin_lock_irqsave(&qdev->lock, flags);
-	qrtr_genpool_set_state(qdev, LOCAL_STATE_PREPARE_REBOOT);
-	qrtr_genpool_signal_setup(qdev);
+	switch (qdev->state) {
+	case LOCAL_STATE_START:
+		qrtr_genpool_set_state(qdev, LOCAL_STATE_PREPARE_REBOOT);
+		qrtr_genpool_signal_setup(qdev);
 
-	rc = wait_event_lock_irq_timeout(qdev->state_wait,
-					 qdev->state == LOCAL_STATE_REBOOT,
-					 qdev->lock,
-					 STATE_WAIT_TIMEOUT);
-	if (!rc)
-		dev_dbg(qdev->dev, "timedout waiting for reboot state change\n");
-	spin_unlock_irqrestore(&qdev->lock, flags);
+		mutex_unlock(&qdev->setup_lock);
+		rc = wait_event_lock_irq_timeout(qdev->state_wait,
+						 qdev->state == LOCAL_STATE_REBOOT,
+						 qdev->lock,
+						 STATE_WAIT_TIMEOUT);
+		if (!rc)
+			dev_dbg(qdev->dev, "timedout waiting for reboot state change\n");
+		qrtr_genpool_set_state(qdev, LOCAL_STATE_REBOOT);
+		spin_unlock_irqrestore(&qdev->lock, flags);
+		mutex_lock(&qdev->setup_lock);
+		break;
+	case LOCAL_STATE_DEFAULT:
+	case LOCAL_STATE_INIT:
+		qrtr_genpool_set_state(qdev, LOCAL_STATE_REBOOT);
+		spin_unlock_irqrestore(&qdev->lock, flags);
+		break;
+	case LOCAL_STATE_PREPARE_REBOOT:
+	case LOCAL_STATE_REBOOT:
+		spin_unlock_irqrestore(&qdev->lock, flags);
+		mutex_unlock(&qdev->setup_lock);
+		return NOTIFY_DONE;
+	default:
+		dev_err(qdev->dev, "Unexpected state %u\n", qdev->state);
+		spin_unlock_irqrestore(&qdev->lock, flags);
+	}
 
 	disable_irq(qdev->irq_xfer);
 
@@ -684,6 +711,7 @@ static int qrtr_genpool_reboot_cb(struct notifier_block *nb,
 
 	vfree(qdev->ring.buf);
 	qdev->ring.buf = NULL;
+	mutex_unlock(&qdev->setup_lock);
 
 	return NOTIFY_DONE;
 }
@@ -726,6 +754,7 @@ static int qrtr_genpool_probe(struct platform_device *pdev)
 	init_waitqueue_head(&qdev->tx_avail_notify);
 	init_waitqueue_head(&qdev->state_wait);
 	INIT_WORK(&qdev->setup_work, qrtr_genpool_setup_work);
+	mutex_init(&qdev->setup_lock);
 	spin_lock_init(&qdev->lock);
 
 	qdev->reboot_handler.notifier_call = qrtr_genpool_reboot_cb;

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2021-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 #include <linux/kernel.h>
@@ -429,7 +429,7 @@ static int remote_etm_suspend(struct device *dev)
 {
 	struct remote_etm_drvdata *drvdata = dev_get_drvdata(dev);
 
-	if (pm_suspend_via_firmware())
+	if (pm_suspend_target_state == PM_SUSPEND_MEM)
 		coresight_disable(drvdata->csdev);
 
 	return 0;
