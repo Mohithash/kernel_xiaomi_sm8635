@@ -692,3 +692,9 @@ __tracepoint_android_vh_folio_end_writeback
 __traceiter_android_vh_folio_end_writeback
 __tracepoint_android_vh_folio_start_writeback
 __traceiter_android_vh_folio_start_writeback
+
+# required by custom memory policy
+__filemap_remove_folio
+inode_add_lru
+prep_new_page
+folio_isolate_lru
