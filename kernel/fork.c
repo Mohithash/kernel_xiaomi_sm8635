@@ -889,6 +889,7 @@ void __mmdrop(struct mm_struct *mm)
 	put_user_ns(mm->user_ns);
 	mm_pasid_drop(mm);
 	kfree(mm->abi_extend);
+	trace_android_vh_mmap_lock_free(&mm->mmap_lock);
 	trace_android_vh_mm_free(mm);
 	free_mm(mm);
 }
@@ -1160,7 +1161,7 @@ static struct task_struct *dup_task_struct(struct task_struct *orig, int node)
 
 	android_init_vendor_data(tsk, 1);
 	android_init_oem_data(tsk, 1);
-
+	android_init_dynamic_vendor_data(tsk);
 	trace_android_vh_dup_task_struct(tsk, orig);
 	return tsk;
 
@@ -1217,6 +1218,12 @@ static void mm_init_uprobes_state(struct mm_struct *mm)
 #ifdef CONFIG_UPROBES
 	mm->uprobes_state.xol_area = NULL;
 #endif
+}
+
+static void mmap_init_lock(struct mm_struct *mm)
+{
+	init_rwsem(&mm->mmap_lock);
+	trace_android_vh_mmap_lock_init(&mm->mmap_lock);
 }
 
 static struct mm_struct *mm_init(struct mm_struct *mm, struct task_struct *p,
