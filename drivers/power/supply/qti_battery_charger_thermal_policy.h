@@ -22,11 +22,6 @@ static int battery_chg_get_fastcharge_mode(struct battery_chg_dev *bcdev, int *m
 	u32 sport_mode;
 	u32 smart_chg;
 
-	if (bcdev->fastcharge_mode_cache >= 0 && bcdev->fastcharge_mode_cache <= 2) {
-		*mode = bcdev->fastcharge_mode_cache;
-		return 0;
-	}
-
 	rc = read_property_id(bcdev, pst, XM_PROP_SPORT_MODE);
 	if (rc < 0)
 		return rc;
