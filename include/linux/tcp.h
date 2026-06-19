@@ -451,9 +451,7 @@ struct tcp_sock {
 	struct request_sock __rcu *fastopen_rsk;
 	struct saved_syn *saved_syn;
 
-/* Rerouting information */
-	ANDROID_KABI_USE2(1, u16 ecn_rehash,	/* PLB triggered rehash attempts */
-			     u8 fast_ack_mode);	/* BBR2: how aggressively to quickack on ECE */
+	ANDROID_KABI_RESERVE(1);
 };
 
 enum tsq_enum {
