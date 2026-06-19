@@ -22,7 +22,7 @@ supported.vendorpatchlevels=
 block=boot
 is_slot_device=auto
 ramdisk_compression=auto
-patch_vbmeta_flag=auto
+patch_vbmeta_flag=1
 no_magisk_check=1
 
 # import functions/variables and setup patching - see for reference (DO NOT REMOVE)
