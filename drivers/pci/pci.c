@@ -62,7 +62,7 @@ struct pci_pme_device {
 	struct pci_dev *dev;
 };
 
-#define PME_TIMEOUT 1000 /* How long between PME checks */
+#define PME_TIMEOUT 4000 /* How long between PME checks */
 
 /*
  * Devices may extend the 1 sec period through Request Retry Status
