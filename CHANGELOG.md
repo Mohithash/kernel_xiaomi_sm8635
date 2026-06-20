@@ -108,11 +108,16 @@ build time, not from the checked-out tag, which drifted from what the
 - `CONFIG_IKCONFIG_PROC` disabled — `/proc/config.gz` previously leaked
   the running defconfig in plaintext, including `CONFIG_KSU=y` /
   `CONFIG_KSU_SUSFS=y`.
-- `CONFIG_KALLSYMS_ALL` disabled — shrinks what's exposed via
-  `/proc/kallsyms` to apps scanning for `ksu_*`/`susfs_*` symbol names.
-  SukiSU's own internal symbol resolver (`infra/symbol_resolver.c`) uses
-  `kallsyms_lookup_name()` against the full compiled-in symbol table,
-  which is unaffected by this — only the userspace-visible table shrinks.
+- `CONFIG_KALLSYMS_ALL` set to disabled in `gki_defconfig`, **but this
+  has no actual effect**: `CONFIG_KPM` (enabled, SukiSU's runtime
+  kernel-patch-module loader) `select`s `KALLSYMS_ALL` directly in
+  `KernelSU/kernel/Kconfig:36`, and a Kconfig `select` always wins over
+  a plain disabled default — confirmed by checking the resolved
+  `.config` after a real defconfig merge, not just the defconfig text.
+  KPM genuinely needs the full symbol table to resolve patch-module
+  targets at runtime, so this is a real feature dependency, not a bug
+  to route around. Left both as-is (KPM > closing this one exposure
+  vector) rather than disable KPM to force the hardening through.
 - `CONFIG_SECURITY_DMESG_RESTRICT=y` — blocks unprivileged `dmesg`/
   `/dev/kmsg` reads, which could otherwise leak KSU/SUSFS init log lines.
 - `kptr_restrict` (`lib/vsprintf.c`) default changed from `0` to `2` —
