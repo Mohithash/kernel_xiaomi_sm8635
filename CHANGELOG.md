@@ -99,6 +99,29 @@ build time, not from the checked-out tag, which drifted from what the
   file to match the target boot image's format; feeding it an
   already-gzipped image risks double-compression and a corrupt kernel.
 
+## 6. Hardening against root/SUSFS detection bypasses
+
+- `CONFIG_IKCONFIG_PROC` disabled — `/proc/config.gz` previously leaked
+  the running defconfig in plaintext, including `CONFIG_KSU=y` /
+  `CONFIG_KSU_SUSFS=y`.
+- `CONFIG_KALLSYMS_ALL` disabled — shrinks what's exposed via
+  `/proc/kallsyms` to apps scanning for `ksu_*`/`susfs_*` symbol names.
+  SukiSU's own internal symbol resolver (`infra/symbol_resolver.c`) uses
+  `kallsyms_lookup_name()` against the full compiled-in symbol table,
+  which is unaffected by this — only the userspace-visible table shrinks.
+- `CONFIG_SECURITY_DMESG_RESTRICT=y` — blocks unprivileged `dmesg`/
+  `/dev/kmsg` reads, which could otherwise leak KSU/SUSFS init log lines.
+- `kptr_restrict` (`lib/vsprintf.c`) default changed from `0` to `2` —
+  kernel pointers are hidden from all unprivileged readers by default
+  instead of requiring a runtime sysctl.
+- `build.sh`: `KBUILD_BUILD_USER`/`KBUILD_BUILD_HOST` now pinned to
+  generic values (`build`/`localhost`) instead of leaking
+  `root@<container-hostname>` into `/proc/version` via the default
+  `whoami`/`uname -n` fallback.
+- `build.sh`: fixed packaging bug copying `Image.gz` into the AnyKernel
+  zip instead of the bare uncompressed `Image` (see §5 above for why
+  this matters — was already documented but not actually applied here).
+
 ## Explicitly not included
 
 - **TCP Brutal, CAKE, BBR2** were added and iterated on in a later round

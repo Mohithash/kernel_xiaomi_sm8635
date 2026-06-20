@@ -8,6 +8,8 @@ KERNEL_DEFCONFIG="gki_defconfig vendor/pineapple_GKI.config vendor/peridot_GKI.c
 export PATH="$MAIN/clang/bin:$PATH"
 export ARCH=arm64
 export SUBARCH=arm64
+export KBUILD_BUILD_USER="build"
+export KBUILD_BUILD_HOST="localhost"
 export KBUILD_COMPILER_STRING="$($MAIN/clang/bin/clang --version | head -n 1 | perl -pe 's/\(http.*?\)//gs' | sed -e 's/  */ /g' -e 's/[[:space:]]*$//')"
 
 if ! [ -d "$MAIN/clang" ]; then
@@ -46,7 +48,7 @@ make -j$(nproc --all) O=out \
 
 TIME="$(date "+%Y%m%d-%H%M%S")"
 mkdir -p tmp
-cp -fp $ZIMAGE_DIR/Image.gz tmp
+cp -fp $ZIMAGE_DIR/Image tmp
 cp -rp ./anykernel/* tmp
 cd tmp
 7za a -mx9 tmp.zip *
