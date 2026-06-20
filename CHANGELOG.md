@@ -122,14 +122,34 @@ build time, not from the checked-out tag, which drifted from what the
   zip instead of the bare uncompressed `Image` (see §5 above for why
   this matters — was already documented but not actually applied here).
 
+## 7. Re-examined and selectively un-abandoned
+
+- **`CONFIG_NET_SCH_CAKE`** enabled. `net/sched/sch_cake.c` ships as
+  stock mainline code in this GKI base already — it was bundled into
+  the earlier abandoned BBR2/Brutal/CAKE round and dropped along with
+  it, but CAKE is a qdisc (operates on `struct sk_buff` queueing, not
+  `struct tcp_skb_cb`) and has no relationship to the BBR2 struct-budget
+  problem below. Re-checked in isolation: no porting needed, nothing to
+  conflict with, just a missing Kconfig bit. Available for `tc qdisc`
+  use on cellular/Wi-Fi interfaces for bufferbloat reduction; does not
+  change the default qdisc.
+- Compared the vendored SUSFS core (`include/linux/susfs.h`,
+  `SUSFS_VERSION "v2.1.0"`) against upstream `simonpunk/susfs4ksu`
+  branch `gki-android14-6.1` (HEAD as of this check: `4a1e8311a`) —
+  byte-for-byte identical, no version drift. SukiSU-Ultra `v4.1.3` is
+  also still upstream's latest tag. Neither needed updating.
+
 ## Explicitly not included
 
-- **TCP Brutal, CAKE, BBR2** were added and iterated on in a later round
-  but never flash-tested on real hardware, unlike everything above.
-  BBR2 specifically does not fit this kernel's `skb->cb[]` budget without
+- **TCP Brutal, BBR2** were added and iterated on in a later round but
+  never flash-tested on real hardware, unlike everything above. BBR2
+  specifically does not fit this kernel's `skb->cb[]` budget without
   removing something else already using that space (hand-verified via
   struct alignment math, confirmed twice with failed builds) — its
   `tx_in_flight`/`lost` fields require per-packet state in
   `struct tcp_skb_cb` that exceeds the kernel's documented 24-byte
   `tx` slot, and was never merged into mainline Linux even by Google's
-  own team, who moved on to BBR v3 without this mechanism.
+  own team, who moved on to BBR v3 without this mechanism (which this
+  kernel has — see §6's predecessor section above). Brutal is
+  third-party (Hysteria-derived), not in mainline, and would need a
+  real port rather than a Kconfig flag; not reattempted here.
