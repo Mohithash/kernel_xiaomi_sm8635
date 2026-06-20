@@ -4,7 +4,7 @@
 ### AnyKernel setup
 # global properties
 properties() { '
-kernel.string=Chidori-Kernel
+kernel.string=Theettam-Kernel
 do.devicecheck=0
 do.modules=0
 do.systemless=0
@@ -30,7 +30,7 @@ no_magisk_check=1
 
 kernel_version=$(cat /proc/version | awk -F '-' '{print $1}' | awk '{print $3}')
 
-ui_print "Flashing Chidori Kernel..."
+ui_print "Flashing Theettam Kernel..."
 ui_print "Kernel version detected:".$kernel_version
 
 # boot install

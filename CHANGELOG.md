@@ -1,5 +1,9 @@
 # Changelog: `sukisu-ultra-susfs` branch
 
+**Theettam Kernel** — a fork of **Chidori Kernel** (by GuidixX) for the
+POCO F6 / peridot, rebranded starting at `v1.0` with SukiSU Ultra +
+SUSFS and the additions documented below.
+
 Base: `GuidixX/kernel_xiaomi_sm8635` branch `16.2` @ `209fbd25e`
 ("power: supply: qti_battery_charger: Remove fastcharge mode caching to prevent sticky slow charging")
 

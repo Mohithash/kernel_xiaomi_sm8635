@@ -1,151 +1,68 @@
-# How do I submit patches to Android Common Kernels
+# Theettam Kernel
 
-1. BEST: Make all of your changes to upstream Linux. If appropriate, backport to the stable releases.
-   These patches will be merged automatically in the corresponding common kernels. If the patch is already
-   in upstream Linux, post a backport of the patch that conforms to the patch requirements below.
-   - Do not send patches upstream that contain only symbol exports. To be considered for upstream Linux,
-additions of `EXPORT_SYMBOL_GPL()` require an in-tree modular driver that uses the symbol -- so include
-the new driver or changes to an existing driver in the same patchset as the export.
-   - When sending patches upstream, the commit message must contain a clear case for why the patch
-is needed and beneficial to the community. Enabling out-of-tree drivers or functionality is not
-not a persuasive case.
+**Custom Android GKI kernel for the POCO F6 (peridot, Snapdragon 7 Gen 3 / sm8635)** — built on KernelSU **SukiSU Ultra** + **SUSFS** root hiding, with BBRv3 congestion control, deep root/LSPosed-hiding hardening, and battery/doze tuning on top.
 
-2. LESS GOOD: Develop your patches out-of-tree (from an upstream Linux point-of-view). Unless these are
-   fixing an Android-specific bug, these are very unlikely to be accepted unless they have been
-   coordinated with kernel-team@android.com. If you want to proceed, post a patch that conforms to the
-   patch requirements below.
+![Theettam Kernel banner](docs/banner.png)
 
-# Common Kernel patch requirements
+A fork of **Chidori Kernel** by **GuidixX**, rebranded and continued as **Theettam Kernel** starting at `v1.0`.
 
-- All patches must conform to the Linux kernel coding standards and pass `scripts/checkpatch.pl`
-- Patches shall not break gki_defconfig or allmodconfig builds for arm, arm64, x86, x86_64 architectures
-(see  https://source.android.com/setup/build/building-kernels)
-- If the patch is not merged from an upstream branch, the subject must be tagged with the type of patch:
-`UPSTREAM:`, `BACKPORT:`, `FROMGIT:`, `FROMLIST:`, or `ANDROID:`.
-- All patches must have a `Change-Id:` tag (see https://gerrit-review.googlesource.com/Documentation/user-changeid.html)
-- If an Android bug has been assigned, there must be a `Bug:` tag.
-- All patches must have a `Signed-off-by:` tag by the author and the submitter
+[![Latest Release](https://img.shields.io/github/v/release/Mohithash/kernel_xiaomi_sm8635?include_prereleases&label=release)](https://github.com/Mohithash/kernel_xiaomi_sm8635/releases)
+[![GKI](https://img.shields.io/badge/GKI-6.1.173-blue)](https://github.com/Mohithash/kernel_xiaomi_sm8635)
+[![KernelSU](https://img.shields.io/badge/KernelSU-SukiSU%20Ultra%20v4.1.3-green)](https://github.com/SukiSU-Ultra/SukiSU-Ultra)
+[![SUSFS](https://img.shields.io/badge/SUSFS-v2.1.0-orange)](https://gitlab.com/simonpunk/susfs4ksu)
+[![Device](https://img.shields.io/badge/device-POCO%20F6%20(peridot)-purple)](https://github.com/Mohithash/kernel_xiaomi_sm8635)
+[![License](https://img.shields.io/badge/license-GPL--2.0-lightgrey)](LICENSE)
 
-Additional requirements are listed below based on patch type
+---
 
-## Requirements for backports from mainline Linux: `UPSTREAM:`, `BACKPORT:`
+## Features
 
-- If the patch is a cherry-pick from Linux mainline with no changes at all
-    - tag the patch subject with `UPSTREAM:`.
-    - add upstream commit information with a `(cherry picked from commit ...)` line
-    - Example:
-        - if the upstream commit message is
-```
-        important patch from upstream
+| | |
+|---|---|
+| **BBRv3 Congestion Control** | Full upstream BBR v2→v3 port (PLB, ECN-on-retransmit, per-route ECN-low) for better throughput/latency under loss |
+| **Root Hiding, Enhanced** | SUSFS (sus_path/mount/kstat, uname & cmdline spoofing, open-redirect) + a zero-width-Unicode path-evasion fix SUSFS itself doesn't cover |
+| **ADB Fixed** | Fixed a KernelSU bug where `adb root`'s `LD_PRELOAD`/`LD_LIBRARY_PATH` injection clobbered an app's own values instead of merging ([upstream PR #909](https://github.com/SukiSU-Ultra/SukiSU-Ultra/pull/909)) |
+| **IPv6 NAT & Hotspot Support** | `IP6_NF_NAT`/`MASQUERADE` enabled alongside existing IPv4 NAT |
+| **Kyber / mq-deadline Schedulers** | Added alongside BFQ for storage I/O scheduler choice |
+| **BFQ I/O Scheduler** | Low-latency block I/O scheduling (existing, carried from base) |
+| **LSPosed/Zygisk Hardening** | `BPF_LSM`, Yama ptrace restriction, `kptr_restrict=2`, `/proc/kallsyms` & `/proc/config.gz` exposure closed, SUSFS log trail silenced |
+| **Battery & Doze Tuning** | Indefinite-wakelock timeout, reduced PCI PME wakeups, TCP slow-start-after-idle disabled for faster Doze-resume reconnects |
+| **Forensic Hardening** | `init_on_free`, randomized per-syscall kernel stack offset |
 
-        This is the detailed description of the important patch
+See [CHANGELOG.md](CHANGELOG.md) for the full, detailed history of every change versus the GuidixX `16.2` base, including what was deliberately **not** included and why (Baseband Guard, LoadPin, TCP Brutal/BBR2 — all evaluated and rejected for concrete conflict reasons).
 
-        Signed-off-by: Fred Jones <fred.jones@foo.org>
-```
->- then Joe Smith would upload the patch for the common kernel as
-```
-        UPSTREAM: important patch from upstream
+## Device support
 
-        This is the detailed description of the important patch
+| Device | Codename | Chipset | Status |
+|---|---|---|---|
+| POCO F6 | `peridot` | Snapdragon 7 Gen 3 (SM8635) | Primary target |
 
-        Signed-off-by: Fred Jones <fred.jones@foo.org>
+## Installation
 
-        Bug: 135791357
-        Change-Id: I4caaaa566ea080fa148c5e768bb1a0b6f7201c01
-        (cherry picked from commit c31e73121f4c1ec41143423ac6ce3ce6dafdcec1)
-        Signed-off-by: Joe Smith <joe.smith@foo.org>
+1. Unlock your bootloader and have a custom recovery (TWRP/OrangeFox) or root solution already in place.
+2. Download the latest zip from [Releases](https://github.com/Mohithash/kernel_xiaomi_sm8635/releases).
+3. Flash via custom recovery, or `fastboot boot`/install-to-inactive-slot, following standard AnyKernel3 flashing flow.
+4. Reboot.
+
+**Pre-release builds are for testing — keep a backup and verify boot before relying on this as a daily driver.**
+
+## Building from source
+
+```bash
+git clone --branch sukisu-ultra-susfs https://github.com/Mohithash/kernel_xiaomi_sm8635.git
+cd kernel_xiaomi_sm8635
+./build.sh
 ```
 
-- If the patch requires any changes from the upstream version, tag the patch with `BACKPORT:`
-instead of `UPSTREAM:`.
-    - use the same tags as `UPSTREAM:`
-    - add comments about the changes under the `(cherry picked from commit ...)` line
-    - Example:
-```
-        BACKPORT: important patch from upstream
+Produces a flashable AnyKernel3 zip in the repo root. Requires the Android Clang toolchain (auto-cloned by `build.sh` if missing).
 
-        This is the detailed description of the important patch
+## Credits
 
-        Signed-off-by: Fred Jones <fred.jones@foo.org>
+- [**GuidixX**](https://github.com/GuidixX) — original Chidori Kernel base this is forked from
+- [**SukiSU-Ultra**](https://github.com/SukiSU-Ultra/SukiSU-Ultra) — KernelSU fork providing root
+- [**simonpunk/susfs4ksu**](https://gitlab.com/simonpunk/susfs4ksu) — SUSFS root-hiding patches
+- [**osm0sis**](https://github.com/osm0sis/AnyKernel3) — AnyKernel3 flashing framework
 
-        Bug: 135791357
-        Change-Id: I4caaaa566ea080fa148c5e768bb1a0b6f7201c01
-        (cherry picked from commit c31e73121f4c1ec41143423ac6ce3ce6dafdcec1)
-        [joe: Resolved minor conflict in drivers/foo/bar.c ]
-        Signed-off-by: Joe Smith <joe.smith@foo.org>
-```
+## Disclaimer
 
-## Requirements for other backports: `FROMGIT:`, `FROMLIST:`,
-
-- If the patch has been merged into an upstream maintainer tree, but has not yet
-been merged into Linux mainline
-    - tag the patch subject with `FROMGIT:`
-    - add info on where the patch came from as `(cherry picked from commit <sha1> <repo> <branch>)`. This
-must be a stable maintainer branch (not rebased, so don't use `linux-next` for example).
-    - if changes were required, use `BACKPORT: FROMGIT:`
-    - Example:
-        - if the commit message in the maintainer tree is
-```
-        important patch from upstream
-
-        This is the detailed description of the important patch
-
-        Signed-off-by: Fred Jones <fred.jones@foo.org>
-```
->- then Joe Smith would upload the patch for the common kernel as
-```
-        FROMGIT: important patch from upstream
-
-        This is the detailed description of the important patch
-
-        Signed-off-by: Fred Jones <fred.jones@foo.org>
-
-        Bug: 135791357
-        (cherry picked from commit 878a2fd9de10b03d11d2f622250285c7e63deace
-         https://git.kernel.org/pub/scm/linux/kernel/git/foo/bar.git test-branch)
-        Change-Id: I4caaaa566ea080fa148c5e768bb1a0b6f7201c01
-        Signed-off-by: Joe Smith <joe.smith@foo.org>
-```
-
-
-- If the patch has been submitted to LKML, but not accepted into any maintainer tree
-    - tag the patch subject with `FROMLIST:`
-    - add a `Link:` tag with a link to the submittal on lore.kernel.org
-    - add a `Bug:` tag with the Android bug (required for patches not accepted into
-a maintainer tree)
-    - if changes were required, use `BACKPORT: FROMLIST:`
-    - Example:
-```
-        FROMLIST: important patch from upstream
-
-        This is the detailed description of the important patch
-
-        Signed-off-by: Fred Jones <fred.jones@foo.org>
-
-        Bug: 135791357
-        Link: https://lore.kernel.org/lkml/20190619171517.GA17557@someone.com/
-        Change-Id: I4caaaa566ea080fa148c5e768bb1a0b6f7201c01
-        Signed-off-by: Joe Smith <joe.smith@foo.org>
-```
-
-## Requirements for Android-specific patches: `ANDROID:`
-
-- If the patch is fixing a bug to Android-specific code
-    - tag the patch subject with `ANDROID:`
-    - add a `Fixes:` tag that cites the patch with the bug
-    - Example:
-```
-        ANDROID: fix android-specific bug in foobar.c
-
-        This is the detailed description of the important fix
-
-        Fixes: 1234abcd2468 ("foobar: add cool feature")
-        Change-Id: I4caaaa566ea080fa148c5e768bb1a0b6f7201c01
-        Signed-off-by: Joe Smith <joe.smith@foo.org>
-```
-
-- If the patch is a new feature
-    - tag the patch subject with `ANDROID:`
-    - add a `Bug:` tag with the Android bug (required for android-specific features)
-
-
+This is a custom kernel that modifies core system behavior, including root-hiding and security hardening. Flashing it is done at your own risk — back up your data first. Not affiliated with Xiaomi, Qualcomm, or Google.
