@@ -698,3 +698,9 @@ __filemap_remove_folio
 inode_add_lru
 prep_new_page
 folio_isolate_lru
+
+# required by capacity normalization
+seq_put_decimal_ull
+percpu_counter_destroy
+__percpu_counter_sum
+__percpu_counter_init
