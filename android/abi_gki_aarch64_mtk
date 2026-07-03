@@ -3205,6 +3205,7 @@
   typec_partner_set_identity
   typec_partner_set_pd_revision
   typec_partner_set_svdm_version
+  typec_partner_set_usb_power_delivery
   typec_port_register_altmodes
   typec_register_partner
   typec_register_port
@@ -3388,6 +3389,10 @@
   usb_match_one_id
   usb_os_desc_prepare_interf_dir
   usb_poison_urb
+  usb_power_delivery_register
+  usb_power_delivery_register_capabilities
+  usb_power_delivery_unregister
+  usb_power_delivery_unregister_capabilities
   usb_put_dev
   usb_put_function
   usb_put_function_instance

@@ -536,6 +536,8 @@
   hdmi_audio_infoframe_pack
   hdmi_drm_infoframe_pack
   hdmi_infoframe_pack
+  hdmi_infoframe_log
+  hdmi_infoframe_unpack
   hdmi_vendor_infoframe_pack
   hid_debug
   hid_hw_close

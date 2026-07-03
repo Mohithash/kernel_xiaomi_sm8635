@@ -46,6 +46,17 @@
   blk_mq_free_tag_set
   blk_queue_update_dma_alignment
   blk_queue_update_dma_pad
+  alloc_workqueue_attrs
+  apply_workqueue_attrs
+  free_workqueue_attrs
+  __traceiter_android_rvh_alloc_and_link_pwqs
+  __tracepoint_android_rvh_alloc_and_link_pwqs
+  __traceiter_android_rvh_create_worker
+  __tracepoint_android_rvh_create_worker
+  __traceiter_android_vh_blk_mq_delay_run_hw_queue
+  __tracepoint_android_vh_blk_mq_delay_run_hw_queue
+  __traceiter_android_vh_blk_mq_kick_requeue_list
+  __tracepoint_android_vh_blk_mq_kick_requeue_list
   mempool_resize
   mempool_alloc_pages
   mempool_free_pages
@@ -417,6 +428,16 @@
   __tracepoint_android_rvh_update_cpus_allowed
   __traceiter_android_rvh_update_cpus_allowed
 
+#required by bcmdhd.ko
+  vfs_fsync
+  kern_path
+  dget_parent
+  vfs_unlink
+  path_put
+  nla_append
+  sdio_writew
+  sdio_readw
+
 #required by brcm_xgbe.ko
   cpumask_local_spread
   udp_tunnel_nic_ops
@@ -671,3 +692,15 @@ __tracepoint_android_vh_folio_end_writeback
 __traceiter_android_vh_folio_end_writeback
 __tracepoint_android_vh_folio_start_writeback
 __traceiter_android_vh_folio_start_writeback
+
+# required by custom memory policy
+__filemap_remove_folio
+inode_add_lru
+prep_new_page
+folio_isolate_lru
+
+# required by capacity normalization
+seq_put_decimal_ull
+percpu_counter_destroy
+__percpu_counter_sum
+__percpu_counter_init
