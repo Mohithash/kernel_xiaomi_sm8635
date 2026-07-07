@@ -21,8 +21,8 @@ permissions:
   contents: write
 
 env:
-  KBUILD_BUILD_USER: Mohithash
-  KBUILD_BUILD_HOST: github-actions
+  KBUILD_BUILD_USER: build
+  KBUILD_BUILD_HOST: localhost
   DEFCONFIG: "gki_defconfig vendor/pineapple_GKI.config vendor/peridot_GKI.config"
   KSUN_REF: ${{ github.event.inputs.ksun_ref || '' }}
 
