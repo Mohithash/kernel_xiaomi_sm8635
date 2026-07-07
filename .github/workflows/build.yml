@@ -17,6 +17,9 @@ concurrency:
   group: build-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: write
+
 env:
   KBUILD_BUILD_USER: Mohithash
   KBUILD_BUILD_HOST: github-actions
@@ -48,17 +51,28 @@ jobs:
           restore-keys: |
             ccache-peridot-
 
+      - name: Cache Clang toolchain
+        id: clang-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/clang
+          key: clang-kei-r547379
+
       - name: Clone Clang toolchain
+        if: steps.clang-cache.outputs.cache-hit != 'true'
         run: |
-          mkdir -p "$HOME/clang"
+          rm -rf "$HOME/clang"
           git clone --depth=1 https://gitlab.com/kei-space/clang/r547379 "$HOME/clang"
-          echo "$HOME/clang/bin" >> "$GITHUB_PATH"
+
+      - name: Add Clang to PATH
+        run: echo "$HOME/clang/bin" >> "$GITHUB_PATH"
 
       - name: Integrate KernelSU-Next (latest)
         run: |
           curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/${KSUN_BRANCH}/kernel/setup.sh" | bash -s "${KSUN_BRANCH}"
-          echo "KSU-Next version:"
-          cat KernelSU-Next/kernel/Makefile | grep -m1 KSU_VERSION || true
+          KSUN_VER="$(git -C KernelSU-Next describe --tags --always 2>/dev/null || echo unknown)"
+          echo "KSUN_VER=$KSUN_VER" >> "$GITHUB_ENV"
+          echo "KernelSU-Next version: $KSUN_VER"
 
       - name: Configure (defconfig + KernelSU-Next)
         run: |
@@ -94,7 +108,8 @@ jobs:
           cp "$IMG" AnyKernel3/Image
           [ -f out/arch/arm64/boot/Image.gz ] && cp out/arch/arm64/boot/Image.gz AnyKernel3/ || true
           VER="$(cat out/include/config/kernel.release 2>/dev/null || echo unknown)"
-          ZIP="peridot-KSUN-${VER}-$(date +%Y%m%d-%H%M).zip"
+          echo "KREL=$VER" >> "$GITHUB_ENV"
+          ZIP="peridot-KSUN-${KSUN_VER:-unknown}-${VER}-$(date +%Y%m%d-%H%M).zip"
           echo "ZIP=$ZIP" >> "$GITHUB_ENV"
           ( cd AnyKernel3 && zip -r9 "../$ZIP" . -x '*.git*' 'README.md' )
           echo "Built: $ZIP"
@@ -120,3 +135,20 @@ jobs:
           name: build-log
           path: build.log
           if-no-files-found: ignore
+
+      - name: Publish Release
+        if: success()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ci-${{ github.run_number }}
+          name: peridot KSU-Next build #${{ github.run_number }}
+          body: |
+            Automated peridot (sm8635) GKI build.
+
+            - Kernel: `${{ env.KREL }}`
+            - KernelSU-Next: `${{ env.KSUN_VER }}`
+            - Commit: ${{ github.sha }}
+
+            Flash `${{ env.ZIP }}` in a custom recovery or via the KernelSU-Next manager.
+          files: ${{ env.ZIP }}
+          fail_on_unmatched_files: true
