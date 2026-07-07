@@ -1,0 +1,120 @@
+name: Build peridot GKI (KernelSU-Next)
+
+on:
+  workflow_dispatch:
+    inputs:
+      ksun_branch:
+        description: "KernelSU-Next branch to integrate"
+        required: false
+        default: "next"
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - '**/*.md'
+      - '.github/**'
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  KBUILD_BUILD_USER: Mohithash
+  KBUILD_BUILD_HOST: github-actions
+  DEFCONFIG: "gki_defconfig vendor/pineapple_GKI.config vendor/peridot_GKI.config"
+  KSUN_BRANCH: ${{ github.event.inputs.ksun_branch || 'next' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout kernel source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bc bison flex build-essential libssl-dev libncurses-dev \
+            git curl zip cpio kmod python3 ccache lld llvm dwarves
+
+      - name: Set up ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ccache-peridot-${{ github.sha }}
+          restore-keys: |
+            ccache-peridot-
+
+      - name: Clone Clang toolchain
+        run: |
+          mkdir -p "$HOME/clang"
+          git clone --depth=1 https://gitlab.com/kei-space/clang/r547379 "$HOME/clang"
+          echo "$HOME/clang/bin" >> "$GITHUB_PATH"
+
+      - name: Integrate KernelSU-Next (latest)
+        run: |
+          curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/${KSUN_BRANCH}/kernel/setup.sh" | bash -s "${KSUN_BRANCH}"
+          echo "KSU-Next version:"
+          cat KernelSU-Next/kernel/Makefile | grep -m1 KSU_VERSION || true
+
+      - name: Configure (defconfig + KernelSU-Next)
+        run: |
+          export ARCH=arm64 SUBARCH=arm64
+          export PATH="$HOME/clang/bin:$PATH"
+          make -j"$(nproc --all)" O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 ${DEFCONFIG}
+          ./scripts/config --file out/.config -e KSU
+          make -j"$(nproc --all)" O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 olddefconfig
+          echo "== KSU config =="
+          grep -E 'CONFIG_KSU|CONFIG_MODULE_SIG=' out/.config || true
+
+      - name: Build kernel
+        run: |
+          export ARCH=arm64 SUBARCH=arm64
+          export PATH="$HOME/clang/bin:$PATH"
+          export KBUILD_COMPILER_STRING="$(clang --version | head -n1)"
+          make -j"$(nproc --all)" O=out ARCH=arm64 \
+            LLVM=1 LLVM_IAS=1 \
+            CC="ccache clang" \
+            2>&1 | tee build.log
+
+      - name: Package AnyKernel3 zip
+        run: |
+          IMG=out/arch/arm64/boot/Image
+          if [ ! -f "$IMG" ]; then echo "Image not found!"; exit 1; fi
+          git clone --depth=1 https://github.com/osm0sis/AnyKernel3 AnyKernel3
+          rm -rf AnyKernel3/.git AnyKernel3/.github
+          sed -i 's|kernel.string=.*|kernel.string=peridot KernelSU-Next (Mohithash)|' AnyKernel3/anykernel.sh
+          sed -i 's|do.devicecheck=1|do.devicecheck=0|' AnyKernel3/anykernel.sh
+          sed -i 's|BLOCK=.*|BLOCK=boot;|' AnyKernel3/anykernel.sh
+          sed -i 's|is_slot_device=0|is_slot_device=1|' AnyKernel3/anykernel.sh
+          cp "$IMG" AnyKernel3/Image
+          [ -f out/arch/arm64/boot/Image.gz ] && cp out/arch/arm64/boot/Image.gz AnyKernel3/ || true
+          VER="$(cat out/include/config/kernel.release 2>/dev/null || echo unknown)"
+          ZIP="peridot-KSUN-${VER}-$(date +%Y%m%d-%H%M).zip"
+          echo "ZIP=$ZIP" >> "$GITHUB_ENV"
+          ( cd AnyKernel3 && zip -r9 "../$ZIP" . -x '*.git*' 'README.md' )
+          echo "Built: $ZIP"
+
+      - name: Upload flashable zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: peridot-KernelSU-Next-AnyKernel3
+          path: ${{ env.ZIP }}
+          if-no-files-found: error
+
+      - name: Upload raw Image
+        uses: actions/upload-artifact@v4
+        with:
+          name: peridot-Image
+          path: out/arch/arm64/boot/Image
+          if-no-files-found: error
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+          if-no-files-found: ignore
