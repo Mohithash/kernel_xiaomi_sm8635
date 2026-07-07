@@ -128,6 +128,14 @@ jobs:
           path: out/arch/arm64/boot/Image
           if-no-files-found: error
 
+      - name: Upload resolved .config
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-config
+          path: out/.config
+          if-no-files-found: ignore
+
       - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v4
