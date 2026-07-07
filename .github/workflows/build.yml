@@ -72,7 +72,8 @@ jobs:
           set -euo pipefail
           REF="${KSUN_REF}"
           if [ -z "$REF" ]; then
-            REF="$(curl -sL https://api.github.com/repos/KernelSU-Next/KernelSU-Next/tags | grep -m1 '"name"' | cut -d'"' -f4)"
+            TAGS_JSON="$(curl -sL https://api.github.com/repos/KernelSU-Next/KernelSU-Next/tags)"
+            REF="$(printf '%s\n' "$TAGS_JSON" | grep '"name"' | head -n1 | cut -d'"' -f4)"
             [ -n "$REF" ] || REF="v3.3.0"
           fi
           echo "Integrating KernelSU-Next @ ${REF}"
