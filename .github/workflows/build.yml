@@ -3,10 +3,10 @@ name: Build peridot GKI (KernelSU-Next)
 on:
   workflow_dispatch:
     inputs:
-      ksun_branch:
-        description: "KernelSU-Next branch to integrate"
+      ksun_ref:
+        description: "KernelSU-Next tag/commit (blank = latest release tag)"
         required: false
-        default: "next"
+        default: ""
   push:
     branches: [ main ]
     paths-ignore:
@@ -24,7 +24,7 @@ env:
   KBUILD_BUILD_USER: Mohithash
   KBUILD_BUILD_HOST: github-actions
   DEFCONFIG: "gki_defconfig vendor/pineapple_GKI.config vendor/peridot_GKI.config"
-  KSUN_BRANCH: ${{ github.event.inputs.ksun_branch || 'next' }}
+  KSUN_REF: ${{ github.event.inputs.ksun_ref || '' }}
 
 jobs:
   build:
@@ -67,10 +67,17 @@ jobs:
       - name: Add Clang to PATH
         run: echo "$HOME/clang/bin" >> "$GITHUB_PATH"
 
-      - name: Integrate KernelSU-Next (latest)
+      - name: Integrate KernelSU-Next
         run: |
-          curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/${KSUN_BRANCH}/kernel/setup.sh" | bash -s "${KSUN_BRANCH}"
-          KSUN_VER="$(git -C KernelSU-Next describe --tags --always 2>/dev/null || echo unknown)"
+          set -euo pipefail
+          REF="${KSUN_REF}"
+          if [ -z "$REF" ]; then
+            REF="$(curl -sL https://api.github.com/repos/KernelSU-Next/KernelSU-Next/tags | grep -m1 '"name"' | cut -d'"' -f4)"
+            [ -n "$REF" ] || REF="v3.3.0"
+          fi
+          echo "Integrating KernelSU-Next @ ${REF}"
+          curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/${REF}/kernel/setup.sh" | bash -s "${REF}"
+          KSUN_VER="$(git -C KernelSU-Next describe --tags --always 2>/dev/null || echo "$REF")"
           echo "KSUN_VER=$KSUN_VER" >> "$GITHUB_ENV"
           echo "KernelSU-Next version: $KSUN_VER"
 
