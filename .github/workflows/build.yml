@@ -114,7 +114,6 @@ jobs:
           sed -i 's|BLOCK=.*|BLOCK=boot;|' AnyKernel3/anykernel.sh
           sed -i 's|is_slot_device=0|is_slot_device=1|' AnyKernel3/anykernel.sh
           cp "$IMG" AnyKernel3/Image
-          [ -f out/arch/arm64/boot/Image.gz ] && cp out/arch/arm64/boot/Image.gz AnyKernel3/ || true
           VER="$(cat out/include/config/kernel.release 2>/dev/null || echo unknown)"
           echo "KREL=$VER" >> "$GITHUB_ENV"
           ZIP="peridot-KSUN-${KSUN_VER:-unknown}-${VER}-$(date +%Y%m%d-%H%M).zip"
