@@ -105,20 +105,19 @@ jobs:
 
       - name: Package AnyKernel3 zip
         run: |
+          set -euo pipefail
           IMG=out/arch/arm64/boot/Image
           if [ ! -f "$IMG" ]; then echo "Image not found!"; exit 1; fi
-          git clone --depth=1 https://github.com/osm0sis/AnyKernel3 AnyKernel3
-          rm -rf AnyKernel3/.git AnyKernel3/.github
-          sed -i 's|kernel.string=.*|kernel.string=peridot KernelSU-Next (Mohithash)|' AnyKernel3/anykernel.sh
-          sed -i 's|do.devicecheck=1|do.devicecheck=0|' AnyKernel3/anykernel.sh
-          sed -i 's|BLOCK=.*|BLOCK=boot;|' AnyKernel3/anykernel.sh
-          sed -i 's|is_slot_device=0|is_slot_device=1|' AnyKernel3/anykernel.sh
+          # Use the device-tested in-repo AnyKernel3 (peridot, init_boot-aware,
+          # ships a working busybox). Do NOT override its slot/block config.
+          rm -rf AnyKernel3
+          cp -r anykernel AnyKernel3
           cp "$IMG" AnyKernel3/Image
           VER="$(cat out/include/config/kernel.release 2>/dev/null || echo unknown)"
           echo "KREL=$VER" >> "$GITHUB_ENV"
           ZIP="peridot-KSUN-${KSUN_VER:-unknown}-${VER}-$(date +%Y%m%d-%H%M).zip"
           echo "ZIP=$ZIP" >> "$GITHUB_ENV"
-          ( cd AnyKernel3 && zip -r9 "../$ZIP" . -x '*.git*' 'README.md' )
+          ( cd AnyKernel3 && zip -r9 "../$ZIP" . -x '.git*' )
           echo "Built: $ZIP"
 
       - name: Upload flashable zip
