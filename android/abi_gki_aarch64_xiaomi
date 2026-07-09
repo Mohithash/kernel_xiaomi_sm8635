@@ -704,3 +704,10 @@ seq_put_decimal_ull
 percpu_counter_destroy
 __percpu_counter_sum
 __percpu_counter_init
+
+# required by custom network policy
+nf_sk_lookup_slow_v4
+xt_register_matches
+xt_unregister_matches
+xt_register_targets
+xt_unregister_targets
