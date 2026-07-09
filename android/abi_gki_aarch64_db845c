@@ -743,6 +743,8 @@
   snd_soc_jack_report
   snd_soc_put_enum_double
   snd_soc_put_volsw
+  snd_soc_register_component
+  snd_soc_unregister_component
   snprintf
   sock_create_kern
   sock_release
