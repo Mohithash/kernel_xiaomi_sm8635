@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
-/* Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved. */
+/* Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries. */
 
 #include <linux/interrupt.h>
 #include <linux/iommu.h>
@@ -587,6 +587,100 @@ void msm_msi_config(struct irq_domain *domain)
 	}
 }
 EXPORT_SYMBOL(msm_msi_config);
+
+void msm_msi_unconfig(struct irq_domain *domain)
+{
+	struct msm_msi *msi;
+	int i;
+
+	if (!domain || !domain->parent || !domain->parent->host_data)
+		return;
+
+	msi = domain->parent->host_data;
+
+	/* Disable MSI configuration access */
+	msm_msi_config_access(domain, false);
+
+	if (msi->type == MSM_MSI_TYPE_QCOM)
+		return;
+
+	/* Disable and mask all interrupts for each group (Synopsys only) */
+	for (i = 0; i < msi->nr_grps; i++) {
+		struct msm_msi_grp *msi_grp = &msi->grps[i];
+
+		/* Disable all interrupts */
+		writel_relaxed(0, msi_grp->int_en_reg);
+		/* Mask all interrupts */
+		writel_relaxed(~0, msi_grp->int_mask_reg);
+	}
+}
+
+void msm_msi_deinit(struct device *dev)
+{
+	struct device_node *of_node;
+	struct irq_domain *domain;
+	struct msm_msi *msi;
+	unsigned int irq;
+	u32 index, grp;
+	int i;
+
+	if (!dev || !dev->of_node)
+		return;
+
+	domain = dev_get_msi_domain(dev);
+	if (!domain || !domain->parent || !domain->parent->host_data)
+		return;
+
+	msi = domain->parent->host_data;
+	of_node = msi->of_node;
+
+	msm_msi_unconfig(msi->msi_domain);
+
+	if (msi->type == MSM_MSI_TYPE_SNPS) {
+		/* SNPS: nr_hwirqs == nr_grps */
+		for (i = 0; i < msi->nr_hwirqs; i++) {
+			irq = msi->grps[i].irqs[0].hwirq;
+			if (irq) {
+				irq_set_chained_handler_and_data(irq, NULL, NULL);
+				disable_irq_wake(irq);
+				irq_dispose_mapping(irq);
+			}
+		}
+	} else {
+		/* QGIC */
+		for (i = 0; i < msi->nr_hwirqs; i++) {
+			grp = i / MSI_IRQ_PER_GRP;
+			index = i % MSI_IRQ_PER_GRP;
+			irq = msi->grps[grp].irqs[index].hwirq;
+			if (irq) {
+				irq_set_chained_handler_and_data(irq, NULL, NULL);
+				disable_irq_wake(irq);
+				irq_dispose_mapping(irq);
+			}
+		}
+	}
+
+	if (msi->msi_domain) {
+		irq_domain_remove(msi->msi_domain);
+		msi->msi_domain = NULL;
+	}
+
+	if (msi->inner_domain) {
+		irq_domain_remove(msi->inner_domain);
+		msi->inner_domain = NULL;
+	}
+
+	if (msi->type == MSM_MSI_TYPE_SNPS && msi->pcie_cfg) {
+		iounmap(msi->pcie_cfg);
+		msi->pcie_cfg = NULL;
+	}
+
+	if (of_node) {
+		of_node_put(of_node);
+		msi->of_node = NULL;
+	}
+}
+EXPORT_SYMBOL_GPL(msm_msi_deinit);
 
 int msm_msi_init(struct device *dev)
 {

@@ -601,7 +601,7 @@ static int adsp_probe(struct platform_device *pdev)
 		goto disable_pm;
 
 	ret = qcom_q6v5_init(&adsp->q6v5, pdev, rproc, desc->crash_reason_smem,
-			     qcom_adsp_pil_handover);
+			 0, 0, qcom_adsp_pil_handover);
 	if (ret)
 		goto disable_pm;
 

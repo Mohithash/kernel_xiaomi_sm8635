@@ -1840,6 +1840,10 @@ static void qcom_glink_destroy_ept(struct rpmsg_endpoint *ept)
 		spin_unlock_irqrestore(&channel->recv_lock, flags);
 		return;
 	}
+	channel->ept.cb = NULL;
+	spin_unlock_irqrestore(&channel->recv_lock, flags);
+
+	/* Decouple the potential rpdev from the channel */
 	if (channel->rpdev) {
 		strscpy_pad(chinfo.name, channel->name, sizeof(chinfo.name));
 		chinfo.src = RPMSG_ADDR_ANY;
@@ -1847,8 +1851,7 @@ static void qcom_glink_destroy_ept(struct rpmsg_endpoint *ept)
 
 		rpmsg_unregister_device(glink->dev, &chinfo);
 	}
-	channel->ept.cb = NULL;
-	spin_unlock_irqrestore(&channel->recv_lock, flags);
+	channel->rpdev = NULL;
 
 	qcom_glink_send_close_req(glink, channel);
 }

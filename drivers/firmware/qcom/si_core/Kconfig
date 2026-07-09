@@ -10,6 +10,17 @@ config QCOM_SI_CORE
 	  to QTEE and TAs. The SI-CORE implements the necessary marshaling of
 	  messages with QTEE.
 
+config QCOM_SI_CORE_ADCI
+	bool "Use ADCI thread to cater service requests from other VMs"
+	depends on QCOM_SI_CORE
+	help
+	  Use a kernel thread to register callback service to QTEE that
+	  will cater requests initiated by other VMs requiring services
+	  hosted by primary VM.
+
+	  Enable if there are multiple VMs and services are hosted only
+	  by primary VM.
+
 config QCOM_SI_CORE_WQ
 	bool "Use direct invocation for RELEASE requests"
 	depends on QCOM_SI_CORE

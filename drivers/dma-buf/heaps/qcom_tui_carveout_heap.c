@@ -139,7 +139,7 @@ static void *qcom_tui_heap_add_pool(struct mem_buf_allocation_data *alloc_data)
 	 * pfn_valid() and pfn_to_online_page() operate at.
 	 */
 	alloc_data->size = ALIGN(alloc_data->size, 1UL << SUBSECTION_SHIFT);
-	alloc_data->trans_type = GH_RM_TRANS_TYPE_DONATE;
+	alloc_data->trans_type = gh_rm_default_trans_type();
 	alloc_data->sgl_desc = NULL;
 	pool = tui_pool_create(alloc_data);
 	if (IS_ERR(pool))
@@ -308,7 +308,7 @@ static struct dma_buf *tui_heap_allocate(struct dma_heap *dma_heap,
 		goto err_sg_alloc_table;
 	sg_set_page(table->sgl, pfn_to_page(PFN_DOWN(paddr)), len, 0);
 
-	buffer->vmperm = mem_buf_vmperm_alloc(table, qcom_sg_release, &buffer->kref);
+	buffer->vmperm = mem_buf_vmperm_alloc(table, qcom_sg_release, (void *)buffer);
 	if (IS_ERR(buffer->vmperm)) {
 		ret = PTR_ERR(buffer->vmperm);
 		goto err_vmperm_alloc;

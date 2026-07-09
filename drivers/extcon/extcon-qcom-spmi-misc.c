@@ -164,6 +164,46 @@ static int qcom_usb_extcon_probe(struct platform_device *pdev)
 }
 
 #ifdef CONFIG_PM_SLEEP
+
+static int qcom_usb_extcon_restore(struct device *dev)
+{
+	struct qcom_usb_extcon_info *info = dev_get_drvdata(dev);
+	struct platform_device *pdev = to_platform_device(dev);
+	int ret = 0;
+
+	if (info->id_irq > 0) {
+		devm_free_irq(dev, info->id_irq, info);
+		ret = devm_request_threaded_irq(dev, info->id_irq, NULL,
+					qcom_usb_irq_handler,
+					IRQF_TRIGGER_RISING |
+					IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
+					pdev->name, info);
+		if (ret < 0) {
+			dev_err(dev, "failed to re-register ID IRQ %d, ret=%d\n",
+				info->id_irq, ret);
+			return ret;
+		}
+	}
+
+	if (info->vbus_irq > 0) {
+		devm_free_irq(dev, info->vbus_irq, info);
+		ret = devm_request_threaded_irq(dev, info->vbus_irq, NULL,
+					qcom_usb_irq_handler,
+					IRQF_TRIGGER_RISING |
+					IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
+					pdev->name, info);
+		if (ret < 0) {
+			dev_err(dev, "failed to re-register VBUS IRQ %d, ret=%d\n",
+				info->vbus_irq, ret);
+			return ret;
+		}
+	}
+
+	queue_delayed_work(system_power_efficient_wq, &info->wq_detcable, info->debounce_jiffies);
+
+	return 0;
+}
+
 static int qcom_usb_extcon_suspend(struct device *dev)
 {
 	struct qcom_usb_extcon_info *info = dev_get_drvdata(dev);
@@ -182,7 +222,9 @@ static int qcom_usb_extcon_suspend(struct device *dev)
 static int qcom_usb_extcon_resume(struct device *dev)
 {
 	struct qcom_usb_extcon_info *info = dev_get_drvdata(dev);
-	int ret = 0;
+	int ret = 0, vbus_ret = 0, id_ret = 0;
+	bool id_state = false, vbus_state = false;
+	bool needs_detection = false;
 
 	if (device_may_wakeup(dev)) {
 		if (info->id_irq > 0)
@@ -191,12 +233,38 @@ static int qcom_usb_extcon_resume(struct device *dev)
 			ret = disable_irq_wake(info->vbus_irq);
 	}
 
+	if (info->vbus_irq > 0) {
+		vbus_ret = irq_get_irqchip_state(info->vbus_irq,
+				IRQCHIP_STATE_LINE_LEVEL, &vbus_state);
+		if (vbus_ret == 0 && extcon_get_state(info->edev, EXTCON_USB) != vbus_state)
+			needs_detection = true;
+		else if (vbus_ret != 0)
+			dev_warn(dev, "failed to get VBUS IRQ state: %d\n", vbus_ret);
+	}
+
+	if (info->id_irq > 0) {
+		id_ret = irq_get_irqchip_state(info->id_irq,
+				IRQCHIP_STATE_LINE_LEVEL, &id_state);
+		if (id_ret == 0 && extcon_get_state(info->edev, EXTCON_USB_HOST) != !id_state)
+			needs_detection = true;
+		else if (id_ret != 0)
+			dev_warn(dev, "failed to get ID IRQ state: %d\n", id_ret);
+	}
+
+	if (needs_detection) {
+		cancel_delayed_work_sync(&info->wq_detcable);
+		qcom_usb_extcon_detect_cable(&info->wq_detcable.work);
+	}
+
 	return ret;
 }
 #endif
 
-static SIMPLE_DEV_PM_OPS(qcom_usb_extcon_pm_ops,
-			 qcom_usb_extcon_suspend, qcom_usb_extcon_resume);
+static const struct dev_pm_ops qcom_usb_extcon_pm_ops = {
+	.suspend = qcom_usb_extcon_suspend,
+	.resume = qcom_usb_extcon_resume,
+	.restore = qcom_usb_extcon_restore,
+};
 
 static const struct of_device_id qcom_usb_extcon_dt_match[] = {
 	{ .compatible = "qcom,pm8941-misc", },

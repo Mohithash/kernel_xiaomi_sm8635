@@ -187,8 +187,7 @@ static void dwmac4_dma_init(struct stmmac_priv *priv, void __iomem *ioaddr,
 
 }
 
-static void _dwmac4_dump_dma_regs(struct stmmac_priv *priv,
-				  void __iomem *ioaddr, u32 channel,
+static void _dwmac4_dump_dma_regs(struct stmmac_priv *priv, void __iomem *ioaddr, u32 channel,
 				  u32 *reg_space)
 {
 	const struct dwmac4_addrs *dwmac4_addrs = priv->plat->dwmac4_addrs;
@@ -250,8 +249,9 @@ static void dwmac4_rx_watchdog(struct stmmac_priv *priv, void __iomem *ioaddr,
 	writel(riwt, ioaddr + DMA_CHAN_RX_WATCHDOG(dwmac4_addrs, queue));
 }
 
-static void dwmac4_dma_rx_chan_op_mode(struct stmmac_priv *priv, void __iomem *ioaddr,
-				       int mode, u32 channel, int fifosz, u8 qmode)
+static void dwmac4_dma_rx_chan_op_mode(struct stmmac_priv *priv,
+				       void __iomem *ioaddr, int mode, u32 channel,
+				       int fifosz, u8 qmode)
 {
 	const struct dwmac4_addrs *dwmac4_addrs = priv->plat->dwmac4_addrs;
 	unsigned int rqs = fifosz / 256 - 1;
@@ -318,8 +318,9 @@ static void dwmac4_dma_rx_chan_op_mode(struct stmmac_priv *priv, void __iomem *i
 	writel(mtl_rx_op, ioaddr + MTL_CHAN_RX_OP_MODE(dwmac4_addrs, channel));
 }
 
-static void dwmac4_dma_tx_chan_op_mode(struct stmmac_priv *priv, void __iomem *ioaddr,
-				       int mode, u32 channel, int fifosz, u8 qmode)
+static void dwmac4_dma_tx_chan_op_mode(struct stmmac_priv *priv,
+				       void __iomem *ioaddr, int mode, u32 channel,
+				       int fifosz, u8 qmode)
 {
 	const struct dwmac4_addrs *dwmac4_addrs = priv->plat->dwmac4_addrs;
 	u32 mtl_tx_op = readl(ioaddr + MTL_CHAN_TX_OP_MODE(dwmac4_addrs,
@@ -467,7 +468,8 @@ static int dwmac4_get_hw_feature(void __iomem *ioaddr,
 }
 
 /* Enable/disable TSO feature and set MSS */
-static void dwmac4_enable_tso(struct stmmac_priv *priv, void __iomem *ioaddr, bool en, u32 chan)
+static void dwmac4_enable_tso(struct stmmac_priv *priv, void __iomem *ioaddr,
+			      bool en, u32 chan)
 {
 	const struct dwmac4_addrs *dwmac4_addrs = priv->plat->dwmac4_addrs;
 	u32 value;
@@ -485,7 +487,8 @@ static void dwmac4_enable_tso(struct stmmac_priv *priv, void __iomem *ioaddr, bo
 	}
 }
 
-static void dwmac4_qmode(struct stmmac_priv *priv, void __iomem *ioaddr, u32 channel, u8 qmode)
+static void dwmac4_qmode(struct stmmac_priv *priv, void __iomem *ioaddr,
+			 u32 channel, u8 qmode)
 {
 	const struct dwmac4_addrs *dwmac4_addrs = priv->plat->dwmac4_addrs;
 	u32 mtl_tx_op = readl(ioaddr + MTL_CHAN_TX_OP_MODE(dwmac4_addrs,
@@ -500,7 +503,8 @@ static void dwmac4_qmode(struct stmmac_priv *priv, void __iomem *ioaddr, u32 cha
 	writel(mtl_tx_op, ioaddr +  MTL_CHAN_TX_OP_MODE(dwmac4_addrs, channel));
 }
 
-static void dwmac4_set_bfsize(struct stmmac_priv *priv, void __iomem *ioaddr, int bfsize, u32 chan)
+static void dwmac4_set_bfsize(struct stmmac_priv *priv, void __iomem *ioaddr,
+			      int bfsize, u32 chan)
 {
 	const struct dwmac4_addrs *dwmac4_addrs = priv->plat->dwmac4_addrs;
 	u32 value = readl(ioaddr + DMA_CHAN_RX_CONTROL(dwmac4_addrs, chan));
@@ -511,7 +515,8 @@ static void dwmac4_set_bfsize(struct stmmac_priv *priv, void __iomem *ioaddr, in
 	writel(value, ioaddr + DMA_CHAN_RX_CONTROL(dwmac4_addrs, chan));
 }
 
-static void dwmac4_enable_sph(struct stmmac_priv *priv, void __iomem *ioaddr, bool en, u32 chan)
+static void dwmac4_enable_sph(struct stmmac_priv *priv, void __iomem *ioaddr,
+			      bool en, u32 chan)
 {
 	const struct dwmac4_addrs *dwmac4_addrs = priv->plat->dwmac4_addrs;
 	u32 value = readl(ioaddr + GMAC_EXT_CONFIG);
@@ -528,7 +533,8 @@ static void dwmac4_enable_sph(struct stmmac_priv *priv, void __iomem *ioaddr, bo
 	writel(value, ioaddr + DMA_CHAN_CONTROL(dwmac4_addrs, chan));
 }
 
-static int dwmac4_enable_tbs(struct stmmac_priv *priv, void __iomem *ioaddr, bool en, u32 chan)
+static int dwmac4_enable_tbs(struct stmmac_priv *priv, void __iomem *ioaddr,
+			     bool en, u32 chan)
 {
 	const struct dwmac4_addrs *dwmac4_addrs = priv->plat->dwmac4_addrs;
 	u32 value = readl(ioaddr + DMA_CHAN_TX_CONTROL(dwmac4_addrs, chan));
