@@ -28,7 +28,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with: { ref: gki-clean-6.1.173, fetch-depth: 1 }
+        with:
+          ref: gki-clean-6.1.173
+          fetch-depth: 1
 
       - name: Install deps
         run: |
@@ -38,10 +40,15 @@ jobs:
             kmod python3 ccache lld llvm dwarves
 
       - uses: actions/cache@v4
-        with: { path: ~/.ccache, key: ccache-susfs173-${{ github.sha }}, restore-keys: ccache-susfs173- }
+        with:
+          path: ~/.ccache
+          key: ccache-susfs173-${{ github.sha }}
+          restore-keys: ccache-susfs173-
       - id: clang
         uses: actions/cache@v4
-        with: { path: ~/clang, key: clang-kei-r547379 }
+        with:
+          path: ~/clang
+          key: clang-kei-r547379
       - if: steps.clang.outputs.cache-hit != 'true'
         run: rm -rf "$HOME/clang"; git clone --depth=1 https://gitlab.com/kei-space/clang/r547379 "$HOME/clang"
       - run: echo "$HOME/clang/bin" >> "$GITHUB_PATH"
@@ -132,10 +139,16 @@ jobs:
           ( cd AnyKernel3 && zip -r9 "../$ZIP" . -x '.git*' )
           echo "ZIP=$ZIP" >> "$GITHUB_ENV"
       - uses: actions/upload-artifact@v4
-        with: { name: susfs173-zip, path: "${{ env.ZIP }}", if-no-files-found: error }
+        with:
+          name: susfs173-zip
+          path: ${{ env.ZIP }}
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: always()
-        with: { name: build-log, path: build.log, if-no-files-found: ignore }
+        with:
+          name: build-log
+          path: build.log
+          if-no-files-found: ignore
       - uses: softprops/action-gh-release@v2
         if: success()
         with:
