@@ -59,7 +59,15 @@ jobs:
           # pershoot maintains a KernelSU-Next fork with SUSFS PRE-INTEGRATED
           # (next-susfs branch) paired with pershoot/susfs4ksu gki-android14-6.1-dev.
           # Matched pair, driver needs no patching. This is the reference KSUN+SUSFS.
-          curl -LSs "https://raw.githubusercontent.com/pershoot/KernelSU-Next/refs/heads/next-susfs/kernel/setup.sh" | bash -s next-susfs
+          # pershoot's next-susfs driver drifted AHEAD of the susfs4ksu fs (uses
+          # symbols like DATA_ADB_NO_AUTO_ADD_SUS_BIND_MOUNT not yet in the fs
+          # headers). Pin the driver to 9c46185e — the commit before that drift —
+          # to match susfs4ksu gki-android14-6.1-dev (v2.2.0).
+          git clone -b next-susfs https://github.com/pershoot/KernelSU-Next KernelSU
+          git -C KernelSU checkout 9c46185e
+          ln -sf ../KernelSU/kernel drivers/kernelsu
+          grep -q 'drivers/kernelsu/Kconfig' drivers/Kconfig || sed -i '/^endmenu/i source "drivers/kernelsu/Kconfig"' drivers/Kconfig
+          grep -q 'obj-$(CONFIG_KSU)' drivers/Makefile || printf '\nobj-$(CONFIG_KSU) += kernelsu/\n' >> drivers/Makefile
           git clone --depth=1 -b gki-android14-6.1-dev https://gitlab.com/pershoot/susfs4ksu.git susfs4ksu
           echo "[i] SUSFS $(sed -n 's/.*SUSFS_VERSION[^"]*"\([^"]*\)".*/\1/p' susfs4ksu/kernel_patches/include/linux/susfs.h)"
           # fs-side SUSFS v2.2.0 hooks (matched to the driver)
