@@ -64,7 +64,7 @@ jobs:
           # The patch's init.c/Kconfig changes target OLD KernelSU and only mangle
           # v4.1.3 (fuzz removes v4.1.3 includes, leaving its own fns undeclared).
           # Restore pristine v4.1.3 init.c + Kconfig; we add SUSFS to them minimally.
-          git -C KernelSU checkout -- kernel/core/init.c kernel/Kconfig
+          git -C KernelSU checkout -- kernel/core/init.c kernel/Kconfig kernel/Kbuild
           # grab v1.7's COMPLETE, valid SUSFS Kconfig menu (reject '+'-extraction
           # drops context `help` lines -> Kconfig syntax error)
           git fetch --depth=1 origin theettam-clean
