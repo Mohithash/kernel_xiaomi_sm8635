@@ -1,6 +1,6 @@
-name: SukiSU + SUSFS v2.2.0 on 6.1.173
+name: KernelSU + SUSFS v2.2.0 on 6.1.173
 
-# Latest SukiSU-Ultra v4.1.3 (which DROPPED SUSFS) with SUSFS v2.2.0 ported back
+# weishu KernelSU + SUSFS v2.2.0 on the proven 6.1.173 base. susfs4ksu patches
 # into its driver, built on the PROVEN 6.1.173 base (main / BBR root). On 6.1.173
 # the SUSFS fs-side applies cleanly (no 6.1.174 namespace.c drift). This isolates
 # the SUSFS-version bump on a known-good base.
@@ -53,52 +53,25 @@ jobs:
         run: rm -rf "$HOME/clang"; git clone --depth=1 https://gitlab.com/kei-space/clang/r547379 "$HOME/clang"
       - run: echo "$HOME/clang/bin" >> "$GITHUB_PATH"
 
-      - name: Port SUSFS v2.2.0 into SukiSU-Ultra v4.1.3
+      - name: Integrate KernelSU + SUSFS v2.2.0 (reference, clean-apply)
         run: |
           set -euo pipefail
-          git clone --depth=1 https://github.com/SukiSU-Ultra/SukiSU-Ultra KernelSU
+          # weishu's KernelSU is the driver susfs4ksu targets — its patches apply
+          # with ZERO rejects (unlike SukiSU/v4.1.3), so no reconciliation needed.
+          git clone --depth=1 https://github.com/tiann/KernelSU KernelSU
           git clone --depth=1 https://gitlab.com/simonpunk/susfs4ksu.git -b "$SUSFS_BRANCH" susfs4ksu
-          echo "[i] SUSFS $(sed -n 's/.*SUSFS_VERSION[^"]*"\([^"]*\)".*/\1/p' susfs4ksu/kernel_patches/include/linux/susfs.h)"
-          # driver-side SUSFS patch — v4.1.3 rewrote init/Kconfig so 3 hunks reject
-          ( cd KernelSU && patch -p1 --fuzz=3 < ../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch || true )
-          # The patch's init.c/Kconfig changes target OLD KernelSU and only mangle
-          # v4.1.3 (fuzz removes v4.1.3 includes, leaving its own fns undeclared).
-          # Restore pristine v4.1.3 init.c + Kconfig; we add SUSFS to them minimally.
-          git -C KernelSU checkout -- kernel/core/init.c kernel/Kconfig kernel/Kbuild
-          # grab v1.7's COMPLETE, valid SUSFS Kconfig menu (reject '+'-extraction
-          # drops context `help` lines -> Kconfig syntax error)
-          git fetch --depth=1 origin theettam-clean
-          git cat-file -p FETCH_HEAD:KernelSU/kernel/Kconfig > /tmp/v17_kconfig
-          # reconcile: insert the SUSFS Kconfig menu + wire susfs_init() into init.c
-          python3 - <<'PY'
-          kdir="KernelSU/kernel"
-          v17=open("/tmp/v17_kconfig").read().splitlines()
-          a=next(i for i,l in enumerate(v17) if 'menu "KernelSU - SUSFS"' in l)
-          b=next(i for i,l in enumerate(v17[a:],a) if l.strip()=="endmenu")
-          menu="\n".join(v17[a:b+1])+"\n"
-          k=open(kdir+"/Kconfig").read()
-          if "KSU_SUSFS" not in k:
-              open(kdir+"/Kconfig","w").write(k.replace("\nendmenu","\n"+menu+"endmenu",1))
-          ic=kdir+"/core/init.c"; s=open(ic).read()
-          if "linux/susfs.h" not in s:
-              s=s.replace('#include "ksu.h"\n','#include "ksu.h"\n#ifdef CONFIG_KSU_SUSFS\n#include <linux/susfs.h>\n#endif\n',1)
-          if "susfs_init()" not in s:
-              s=s.replace("    ksu_feature_init();","#ifdef CONFIG_KSU_SUSFS\n    susfs_init();\n#endif\n    ksu_feature_init();",1)
-          open(ic,"w").write(s)
-          PY
-          rm -f KernelSU/kernel/*.rej KernelSU/kernel/core/*.rej
-          grep -q "config KSU_SUSFS" KernelSU/kernel/Kconfig || { echo "::error::driver SUSFS Kconfig missing"; exit 1; }
-          grep -q "susfs_init()" KernelSU/kernel/core/init.c || { echo "::error::susfs_init not wired"; exit 1; }
-          echo "[+] SUSFS v2.2.0 ported into SukiSU-Ultra v4.1.3 driver"
-          # wire driver into the kernel tree
+          echo "[i] SUSFS $(sed -n 's/.*SUSFS_VERSION[^"]*"\([^"]*\)".*/\1/p' susfs4ksu/kernel_patches/include/linux/susfs.h)  KSU $(git -C KernelSU rev-parse --short HEAD)"
+          # driver-side SUSFS patch (clean)
+          ( cd KernelSU && patch -p1 < ../susfs4ksu/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch )
+          # wire the driver into the kernel tree
           ln -sf ../KernelSU/kernel drivers/kernelsu
           grep -q 'drivers/kernelsu/Kconfig' drivers/Kconfig || sed -i '/^endmenu/i source "drivers/kernelsu/Kconfig"' drivers/Kconfig
           grep -q 'obj-$(CONFIG_KSU)' drivers/Makefile || printf '\nobj-$(CONFIG_KSU) += kernelsu/\n' >> drivers/Makefile
-          # fs-side SUSFS v2.2.0 hooks (clean on 6.1.173)
+          # fs-side SUSFS v2.2.0 hooks
           cp -v susfs4ksu/kernel_patches/include/linux/*.h include/linux/
           cp -v susfs4ksu/kernel_patches/fs/*.c fs/
           patch -p1 --fuzz=3 < "susfs4ksu/kernel_patches/50_add_susfs_in_${SUSFS_BRANCH}.patch" || true
-          # namespace.c header/externs (only if the DECLARATION is missing — not the use)
+          # namespace.c susfs decls (idempotent; only if a hunk shifted)
           python3 - <<'PY'
           f="fs/namespace.c"; s=open(f).read()
           inc="#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\n#include <linux/susfs_def.h>\n#endif\n"
@@ -110,12 +83,12 @@ jobs:
               s=s.replace("#include <linux/mnt_idmapping.h>\n","#include <linux/mnt_idmapping.h>\n"+inc,1)
           if "extern bool susfs_is_current_ksu_domain" not in s:
               s=s.replace('#include "internal.h"\n','#include "internal.h"\n'+ext,1)
-          open(f,"w").write(s); print("[+] namespace.c susfs decls ensured")
+          open(f,"w").write(s)
           PY
           rm -f fs/namespace.c.rej fs/namespace.c.orig
           REJ="$(find . -name '*.rej')"
-          if [ -n "$REJ" ]; then echo "::error::fs SUSFS rejects:"; for r in $REJ; do echo "== $r =="; cat "$r"; done; exit 1; fi
-          echo "[+] SUSFS fs-side fully applied on 6.1.173"
+          if [ -n "$REJ" ]; then echo "::error::SUSFS rejects:"; for r in $REJ; do echo "== $r =="; cat "$r"; done; exit 1; fi
+          echo "[+] KernelSU + SUSFS v2.2.0 integrated on 6.1.173"
 
       - name: Configure + build
         run: |
@@ -140,7 +113,7 @@ jobs:
           IMG=out/arch/arm64/boot/Image; [ -f "$IMG" ] || { echo "no Image"; exit 1; }
           rm -rf AnyKernel3; cp -r anykernel AnyKernel3; cp "$IMG" AnyKernel3/Image
           VER="$(cat out/include/config/kernel.release 2>/dev/null || echo 6.1.173)"
-          ZIP="Theettam-SukiSU-SUSFS2.2.0-peridot-${VER}-$(date +%Y%m%d-%H%M).zip"
+          ZIP="Theettam-KSU-SUSFS2.2.0-peridot-${VER}-$(date +%Y%m%d-%H%M).zip"
           ( cd AnyKernel3 && zip -r9 "../$ZIP" . -x '.git*' )
           echo "ZIP=$ZIP" >> "$GITHUB_ENV"
       - uses: actions/upload-artifact@v4
@@ -158,6 +131,6 @@ jobs:
         if: success()
         with:
           tag_name: susfs173-${{ github.run_number }}
-          name: SukiSU + SUSFS v2.2.0 on 6.1.173 #${{ github.run_number }}
-          body: "SukiSU-Ultra v4.1.3 + SUSFS v2.2.0 ported in, on proven 6.1.173 base."
+          name: KernelSU + SUSFS v2.2.0 on 6.1.173 #${{ github.run_number }}
+          body: "weishu KernelSU + SUSFS v2.2.0 (reference clean integration) on proven 6.1.173 base."
           files: "${{ env.ZIP }}"
