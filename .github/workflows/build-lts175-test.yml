@@ -1,0 +1,80 @@
+name: LTS 6.1.175 + BORE + ADIOS (compile test)
+
+# Validation build for the new base: peridot source LTS-bumped to 6.1.175
+# (android14-6.1-lts) + BORE CPU scheduler + ADIOS I/O scheduler. No root/SUSFS —
+# this only proves the base compiles before the 4 root flavors are rebuilt on it.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ lts-175 ]
+    paths-ignore: [ '**/*.md' ]
+
+concurrency:
+  group: lts175-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  KBUILD_BUILD_USER: build
+  KBUILD_BUILD_HOST: localhost
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: lts-175
+          fetch-depth: 1
+
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends bc bison flex build-essential \
+            libssl-dev libncurses-dev libelf-dev zlib1g-dev pkg-config git curl zip cpio \
+            kmod python3 ccache lld llvm dwarves
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ccache-lts175-${{ github.sha }}
+          restore-keys: ccache-lts175-
+      - id: clang
+        uses: actions/cache@v4
+        with:
+          path: ~/clang
+          key: clang-kei-r547379
+      - if: steps.clang.outputs.cache-hit != 'true'
+        run: rm -rf "$HOME/clang"; git clone --depth=1 https://gitlab.com/kei-space/clang/r547379 "$HOME/clang"
+      - run: echo "$HOME/clang/bin" >> "$GITHUB_PATH"
+
+      - name: Configure + build
+        run: |
+          set -euo pipefail
+          export ARCH=arm64 SUBARCH=arm64 PATH="$HOME/clang/bin:$PATH"
+          echo "=== base version ==="; grep -E '^(VERSION|PATCHLEVEL|SUBLEVEL) ' Makefile
+          make -j"$(nproc --all)" O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 gki_defconfig
+          make -j"$(nproc --all)" O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 olddefconfig
+          echo "=== BORE + ADIOS must be enabled ==="
+          grep -E 'CONFIG_SCHED_BORE=y|CONFIG_MQ_IOSCHED_ADIOS|CONFIG_MQ_IOSCHED_DEFAULT_ADIOS' out/.config | tee /tmp/feat
+          grep -q 'CONFIG_SCHED_BORE=y' /tmp/feat || { echo "::error::BORE not enabled"; exit 1; }
+          grep -q 'CONFIG_MQ_IOSCHED_ADIOS' /tmp/feat || { echo "::error::ADIOS not enabled"; exit 1; }
+          export KBUILD_COMPILER_STRING="$(clang --version | head -n1)"
+          make -j"$(nproc --all)" O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CC="ccache clang" 2>&1 | tee build.log
+
+      - name: Verify Image + report version
+        run: |
+          set -euo pipefail
+          IMG=out/arch/arm64/boot/Image
+          [ -f "$IMG" ] || { echo "::error::no Image produced"; exit 1; }
+          echo "✅ Image built: $(stat -c%s "$IMG") bytes"
+          echo "kernel.release: $(cat out/include/config/kernel.release)"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lts175-build-log
+          path: build.log
+          if-no-files-found: ignore
