@@ -1,0 +1,168 @@
+name: Build peridot GKI (KernelSU-Next)
+
+on:
+  workflow_dispatch:
+    inputs:
+      ksun_ref:
+        description: "KernelSU-Next tag/commit (blank = latest release tag)"
+        required: false
+        default: ""
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - '**/*.md'
+      - '.github/**'
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  KBUILD_BUILD_USER: build
+  KBUILD_BUILD_HOST: localhost
+  DEFCONFIG: "gki_defconfig vendor/pineapple_GKI.config vendor/peridot_GKI.config"
+  KSUN_REF: ${{ github.event.inputs.ksun_ref || '' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout kernel source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bc bison flex build-essential libssl-dev libncurses-dev \
+            libelf-dev zlib1g-dev pkg-config \
+            git curl zip cpio kmod python3 ccache lld llvm dwarves
+
+      - name: Set up ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ccache-peridot-${{ github.sha }}
+          restore-keys: |
+            ccache-peridot-
+
+      - name: Cache Clang toolchain
+        id: clang-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/clang
+          key: clang-kei-r547379
+
+      - name: Clone Clang toolchain
+        if: steps.clang-cache.outputs.cache-hit != 'true'
+        run: |
+          rm -rf "$HOME/clang"
+          git clone --depth=1 https://gitlab.com/kei-space/clang/r547379 "$HOME/clang"
+
+      - name: Add Clang to PATH
+        run: echo "$HOME/clang/bin" >> "$GITHUB_PATH"
+
+      - name: Integrate KernelSU-Next
+        run: |
+          set -euo pipefail
+          REF="${KSUN_REF}"
+          if [ -z "$REF" ]; then
+            TAGS_JSON="$(curl -sL https://api.github.com/repos/KernelSU-Next/KernelSU-Next/tags)"
+            REF="$(printf '%s\n' "$TAGS_JSON" | grep '"name"' | head -n1 | cut -d'"' -f4)"
+            [ -n "$REF" ] || REF="v3.3.0"
+          fi
+          echo "Integrating KernelSU-Next @ ${REF}"
+          curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/${REF}/kernel/setup.sh" | bash -s "${REF}"
+          KSUN_VER="$(git -C KernelSU-Next describe --tags --always 2>/dev/null || echo "$REF")"
+          echo "KSUN_VER=$KSUN_VER" >> "$GITHUB_ENV"
+          echo "KernelSU-Next version: $KSUN_VER"
+
+      - name: Configure (defconfig + KernelSU-Next)
+        run: |
+          export ARCH=arm64 SUBARCH=arm64
+          export PATH="$HOME/clang/bin:$PATH"
+          make -j"$(nproc --all)" O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 ${DEFCONFIG}
+          ./scripts/config --file out/.config -e KSU
+          make -j"$(nproc --all)" O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 olddefconfig
+          echo "== KSU config =="
+          grep -E 'CONFIG_KSU|CONFIG_MODULE_SIG=' out/.config || true
+
+      - name: Build kernel
+        run: |
+          set -o pipefail
+          export ARCH=arm64 SUBARCH=arm64
+          export PATH="$HOME/clang/bin:$PATH"
+          export KBUILD_COMPILER_STRING="$(clang --version | head -n1)"
+          make -j"$(nproc --all)" O=out ARCH=arm64 \
+            LLVM=1 LLVM_IAS=1 \
+            CC="ccache clang" \
+            2>&1 | tee build.log
+
+      - name: Package AnyKernel3 zip
+        run: |
+          set -euo pipefail
+          IMG=out/arch/arm64/boot/Image
+          if [ ! -f "$IMG" ]; then echo "Image not found!"; exit 1; fi
+          # Use the device-tested in-repo AnyKernel3 (peridot, init_boot-aware,
+          # ships a working busybox). Do NOT override its slot/block config.
+          rm -rf AnyKernel3
+          cp -r anykernel AnyKernel3
+          cp "$IMG" AnyKernel3/Image
+          VER="$(cat out/include/config/kernel.release 2>/dev/null || echo unknown)"
+          echo "KREL=$VER" >> "$GITHUB_ENV"
+          ZIP="peridot-KSUN-${KSUN_VER:-unknown}-${VER}-$(date +%Y%m%d-%H%M).zip"
+          echo "ZIP=$ZIP" >> "$GITHUB_ENV"
+          ( cd AnyKernel3 && zip -r9 "../$ZIP" . -x '.git*' )
+          echo "Built: $ZIP"
+
+      - name: Upload flashable zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: peridot-KernelSU-Next-AnyKernel3
+          path: ${{ env.ZIP }}
+          if-no-files-found: error
+
+      - name: Upload raw Image
+        uses: actions/upload-artifact@v4
+        with:
+          name: peridot-Image
+          path: out/arch/arm64/boot/Image
+          if-no-files-found: error
+
+      - name: Upload resolved .config
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-config
+          path: out/.config
+          if-no-files-found: ignore
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+          if-no-files-found: ignore
+
+      - name: Publish Release
+        if: success()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ci-${{ github.run_number }}
+          name: peridot KSU-Next build #${{ github.run_number }}
+          body: |
+            Automated peridot (sm8635) GKI build.
+
+            - Kernel: `${{ env.KREL }}`
+            - KernelSU-Next: `${{ env.KSUN_VER }}`
+            - Commit: ${{ github.sha }}
+
+            Flash `${{ env.ZIP }}` in a custom recovery or via the KernelSU-Next manager.
+          files: ${{ env.ZIP }}
+          fail_on_unmatched_files: true
