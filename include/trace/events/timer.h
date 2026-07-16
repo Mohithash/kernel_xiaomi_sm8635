@@ -198,13 +198,12 @@ TRACE_EVENT(hrtimer_init,
  * hrtimer_start - called when the hrtimer is started
  * @hrtimer:	pointer to struct hrtimer
  * @mode:	the hrtimers mode
- * @was_armed:	Was armed when hrtimer_start*() was invoked
  */
 TRACE_EVENT(hrtimer_start,
 
-	TP_PROTO(struct hrtimer *hrtimer, enum hrtimer_mode mode, bool was_armed),
+	TP_PROTO(struct hrtimer *hrtimer, enum hrtimer_mode mode),
 
-	TP_ARGS(hrtimer, mode, was_armed),
+	TP_ARGS(hrtimer, mode),
 
 	TP_STRUCT__entry(
 		__field( void *,	hrtimer		)
@@ -212,7 +211,6 @@ TRACE_EVENT(hrtimer_start,
 		__field( s64,		expires		)
 		__field( s64,		softexpires	)
 		__field( enum hrtimer_mode,	mode	)
-		__field( bool,		was_armed	)
 	),
 
 	TP_fast_assign(
@@ -221,14 +219,13 @@ TRACE_EVENT(hrtimer_start,
 		__entry->expires	= hrtimer_get_expires(hrtimer);
 		__entry->softexpires	= hrtimer_get_softexpires(hrtimer);
 		__entry->mode		= mode;
-		__entry->was_armed	= was_armed;
 	),
 
 	TP_printk("hrtimer=%p function=%ps expires=%llu softexpires=%llu "
-		  "mode=%s was_armed=%d", __entry->hrtimer, __entry->function,
+		  "mode=%s", __entry->hrtimer, __entry->function,
 		  (unsigned long long) __entry->expires,
 		  (unsigned long long) __entry->softexpires,
-		  decode_hrtimer_mode(__entry->mode), __entry->was_armed)
+		  decode_hrtimer_mode(__entry->mode))
 );
 
 /**
