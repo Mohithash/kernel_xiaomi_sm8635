@@ -1,151 +1,75 @@
-# How do I submit patches to Android Common Kernels
+# Theettam Kernel — POCO F6 / Redmi Turbo 3 (peridot, SM8635)
 
-1. BEST: Make all of your changes to upstream Linux. If appropriate, backport to the stable releases.
-   These patches will be merged automatically in the corresponding common kernels. If the patch is already
-   in upstream Linux, post a backport of the patch that conforms to the patch requirements below.
-   - Do not send patches upstream that contain only symbol exports. To be considered for upstream Linux,
-additions of `EXPORT_SYMBOL_GPL()` require an in-tree modular driver that uses the symbol -- so include
-the new driver or changes to an existing driver in the same patchset as the export.
-   - When sending patches upstream, the commit message must contain a clear case for why the patch
-is needed and beneficial to the community. Enabling out-of-tree drivers or functionality is not
-not a persuasive case.
+A custom **GKI `android14-6.1.173`** kernel for the Xiaomi **peridot** (POCO F6 / Redmi Turbo 3,
+Snapdragon 8s Gen 3), tuned for performance and battery, and shipped in **four root flavors** so
+you can pick the exact root + hiding stack you want.
 
-2. LESS GOOD: Develop your patches out-of-tree (from an upstream Linux point-of-view). Unless these are
-   fixing an Android-specific bug, these are very unlikely to be accepted unless they have been
-   coordinated with kernel-team@android.com. If you want to proceed, post a patch that conforms to the
-   patch requirements below.
+> All four boot on peridot. The SUSFS variants pair the latest **SUSFS v2.2.0** with the current
+> KernelSU-family drivers — including combinations that did not exist upstream and were integrated
+> for this kernel.
 
-# Common Kernel patch requirements
+---
 
-- All patches must conform to the Linux kernel coding standards and pass `scripts/checkpatch.pl`
-- Patches shall not break gki_defconfig or allmodconfig builds for arm, arm64, x86, x86_64 architectures
-(see  https://source.android.com/setup/build/building-kernels)
-- If the patch is not merged from an upstream branch, the subject must be tagged with the type of patch:
-`UPSTREAM:`, `BACKPORT:`, `FROMGIT:`, `FROMLIST:`, or `ANDROID:`.
-- All patches must have a `Change-Id:` tag (see https://gerrit-review.googlesource.com/Documentation/user-changeid.html)
-- If an Android bug has been assigned, there must be a `Bug:` tag.
-- All patches must have a `Signed-off-by:` tag by the author and the submitter
+## Choose your build
 
-Additional requirements are listed below based on patch type
+| Build | Root engine | SUSFS | KPM | Manager app | Best for |
+|---|---|:---:|:---:|---|---|
+| **KSUN** | KernelSU-Next v3.3.0 | — | — | KernelSU-Next | Lightweight root, no kernel-side hiding |
+| **KSUN + SUSFS** | KernelSU-Next v3.3.0 | ✅ v2.2.0 | — | KernelSU-Next | Root **+ full hiding** |
+| **SukiSU-Ultra + SUSFS** | SukiSU-Ultra | ✅ v2.2.0 | ✅ | SukiSU | Root + hiding **+ Kernel Patch Modules** |
+| **ReSukiSU + SUSFS** | ReSukiSU | ✅ v2.2.0 *(native)* | — | ReSukiSU | Root + hiding, **cleanest integration** |
 
-## Requirements for backports from mainline Linux: `UPSTREAM:`, `BACKPORT:`
+**Quick guidance**
+- **Just want root, minimal footprint?** → **KSUN**
+- **Root + hide from detection (banking, integrity, etc.)?** → any SUSFS build
+- **Want runtime Kernel Patch Modules (`.kpm`)?** → **SukiSU-Ultra + SUSFS**
+- **Want the most robust SUSFS (driver ships it natively, no hand-port)?** → **ReSukiSU + SUSFS**
 
-- If the patch is a cherry-pick from Linux mainline with no changes at all
-    - tag the patch subject with `UPSTREAM:`.
-    - add upstream commit information with a `(cherry picked from commit ...)` line
-    - Example:
-        - if the upstream commit message is
-```
-        important patch from upstream
+> The KSUN and SukiSU SUSFS builds integrate SUSFS via a hand-authored port (their drivers don't
+> ship kernel-side SUSFS). ReSukiSU implements SUSFS natively, so its pairing is the cleanest.
+> Flash any build with a **full backup and fastboot recovery ready**.
 
-        This is the detailed description of the important patch
+---
 
-        Signed-off-by: Fred Jones <fred.jones@foo.org>
-```
->- then Joe Smith would upload the patch for the common kernel as
-```
-        UPSTREAM: important patch from upstream
+## SUSFS features (all SUSFS builds)
 
-        This is the detailed description of the important patch
+SUSFS **v2.2.0** with: `sus_path`, `sus_mount`, `sus_kstat`, `sus_map`, `spoof_uname`,
+`spoof_cmdline/bootconfig`, `open_redirect`, and `hide_ksu_susfs_symbols`. Drive it via your
+manager app's SUSFS settings (or a SUSFS module).
 
-        Signed-off-by: Fred Jones <fred.jones@foo.org>
+## Kernel tuning (all builds)
 
-        Bug: 135791357
-        Change-Id: I4caaaa566ea080fa148c5e768bb1a0b6f7201c01
-        (cherry picked from commit c31e73121f4c1ec41143423ac6ce3ce6dafdcec1)
-        Signed-off-by: Joe Smith <joe.smith@foo.org>
-```
+- **Networking:** BBRv3 congestion control + **fq_codel** default qdisc (low bufferbloat), in-kernel **WireGuard**
+- **Memory:** **MGLRU** (multi-gen LRU, on by default), zram with lz4/zstd, cleancache
+- **Scheduler:** UCLAMP (task + task-group), `HZ=300`
+- **Power:** PM/thermal cleanups, `init_on_free` disabled for lower overhead
 
-- If the patch requires any changes from the upstream version, tag the patch with `BACKPORT:`
-instead of `UPSTREAM:`.
-    - use the same tags as `UPSTREAM:`
-    - add comments about the changes under the `(cherry picked from commit ...)` line
-    - Example:
-```
-        BACKPORT: important patch from upstream
+---
 
-        This is the detailed description of the important patch
+## Flashing
 
-        Signed-off-by: Fred Jones <fred.jones@foo.org>
+1. Download the ZIP for your chosen build from [Releases](../../releases).
+2. Boot to a custom recovery (or use the AnyKernel3 flash flow) — the ZIP is **AnyKernel3** based.
+3. Flash the ZIP, reboot.
+4. Install the matching **manager app** (KernelSU-Next / SukiSU / ReSukiSU) and grant root.
+5. For hiding: enable **SUSFS** in the manager (or install a SUSFS module) and add your targets.
 
-        Bug: 135791357
-        Change-Id: I4caaaa566ea080fa148c5e768bb1a0b6f7201c01
-        (cherry picked from commit c31e73121f4c1ec41143423ac6ce3ce6dafdcec1)
-        [joe: Resolved minor conflict in drivers/foo/bar.c ]
-        Signed-off-by: Joe Smith <joe.smith@foo.org>
-```
+**Always keep a backup of your current boot/init_boot and be ready for fastboot recovery.**
 
-## Requirements for other backports: `FROMGIT:`, `FROMLIST:`,
+---
 
-- If the patch has been merged into an upstream maintainer tree, but has not yet
-been merged into Linux mainline
-    - tag the patch subject with `FROMGIT:`
-    - add info on where the patch came from as `(cherry picked from commit <sha1> <repo> <branch>)`. This
-must be a stable maintainer branch (not rebased, so don't use `linux-next` for example).
-    - if changes were required, use `BACKPORT: FROMGIT:`
-    - Example:
-        - if the commit message in the maintainer tree is
-```
-        important patch from upstream
+## Credits & upstreams
 
-        This is the detailed description of the important patch
+Built on GPL-2.0 upstreams — thanks to their authors:
 
-        Signed-off-by: Fred Jones <fred.jones@foo.org>
-```
->- then Joe Smith would upload the patch for the common kernel as
-```
-        FROMGIT: important patch from upstream
+- **KernelSU-Next** — <https://github.com/KernelSU-Next/KernelSU-Next>
+- **SukiSU-Ultra** — <https://github.com/ShirkNeko/SukiSU-Ultra>
+- **ReSukiSU** — <https://github.com/ReSukiSU/ReSukiSU>
+- **SUSFS (susfs4ksu)** by simonpunk — <https://gitlab.com/simonpunk/susfs4ksu>
+- peridot device kernel source (Xiaomi) + Android Common Kernel `android14-6.1`
 
-        This is the detailed description of the important patch
+The SUSFS integration scripts for the driver-agnostic hand-port (`scripts/susfs/integrate.sh`)
+and the native pairing (`scripts/susfs/integrate-native.sh`) live in this tree, along with the
+per-build CI workflows under `.github/workflows/`.
 
-        Signed-off-by: Fred Jones <fred.jones@foo.org>
-
-        Bug: 135791357
-        (cherry picked from commit 878a2fd9de10b03d11d2f622250285c7e63deace
-         https://git.kernel.org/pub/scm/linux/kernel/git/foo/bar.git test-branch)
-        Change-Id: I4caaaa566ea080fa148c5e768bb1a0b6f7201c01
-        Signed-off-by: Joe Smith <joe.smith@foo.org>
-```
-
-
-- If the patch has been submitted to LKML, but not accepted into any maintainer tree
-    - tag the patch subject with `FROMLIST:`
-    - add a `Link:` tag with a link to the submittal on lore.kernel.org
-    - add a `Bug:` tag with the Android bug (required for patches not accepted into
-a maintainer tree)
-    - if changes were required, use `BACKPORT: FROMLIST:`
-    - Example:
-```
-        FROMLIST: important patch from upstream
-
-        This is the detailed description of the important patch
-
-        Signed-off-by: Fred Jones <fred.jones@foo.org>
-
-        Bug: 135791357
-        Link: https://lore.kernel.org/lkml/20190619171517.GA17557@someone.com/
-        Change-Id: I4caaaa566ea080fa148c5e768bb1a0b6f7201c01
-        Signed-off-by: Joe Smith <joe.smith@foo.org>
-```
-
-## Requirements for Android-specific patches: `ANDROID:`
-
-- If the patch is fixing a bug to Android-specific code
-    - tag the patch subject with `ANDROID:`
-    - add a `Fixes:` tag that cites the patch with the bug
-    - Example:
-```
-        ANDROID: fix android-specific bug in foobar.c
-
-        This is the detailed description of the important fix
-
-        Fixes: 1234abcd2468 ("foobar: add cool feature")
-        Change-Id: I4caaaa566ea080fa148c5e768bb1a0b6f7201c01
-        Signed-off-by: Joe Smith <joe.smith@foo.org>
-```
-
-- If the patch is a new feature
-    - tag the patch subject with `ANDROID:`
-    - add a `Bug:` tag with the Android bug (required for android-specific features)
-
-
+*Maintainer: Mohithash (Theettam Kernel). Root/SUSFS builds are provided as-is; flash at your own risk.*
