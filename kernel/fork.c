@@ -2455,6 +2455,9 @@ static __latent_entropy struct task_struct *copy_process(
 	retval = sched_fork(clone_flags, p);
 	if (retval)
 		goto bad_fork_cleanup_policy;
+#ifdef CONFIG_SCHED_BORE
+	sched_fork_bore(p, current);
+#endif
 
 	retval = perf_event_init_task(p, clone_flags);
 	if (retval)
