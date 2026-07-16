@@ -5,10 +5,7 @@ name: peridot 6.1.175 (ACK-lts merge) — compile test
 # root/SUSFS/BORE/ADIOS work is layered on top.
 
 on:
-  workflow_dispatch:
-  push:
-    branches: [ peridot-6.1.175 ]
-    paths-ignore: [ '**/*.md' ]
+  workflow_dispatch:   # base compile test — base already boots; run on demand only
 
 concurrency:
   group: peridot175-${{ github.ref }}

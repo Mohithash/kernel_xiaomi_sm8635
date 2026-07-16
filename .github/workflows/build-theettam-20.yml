@@ -1,0 +1,243 @@
+name: Theettam 2.0 — 4 root flavors on 6.1.175
+
+# Builds all four root flavors on the peridot 6.1.175 base (ACK android14-6.1-lts
+# merge + BORE + ADIOS). Each flavor is the SAME integration that boots on the
+# 1.9-vali 6.1.173 base — the 11 fs files SUSFS patches are byte-identical between
+# 173 and 175, so the port carries over unchanged. Only the base moved.
+#
+#   ksun-plain      KernelSU-Next v3.3.0, no SUSFS
+#   ksun-susfs      KernelSU-Next v3.3.0 + SUSFS v2.2.0   (hand-port, scripts/susfs/integrate.sh)
+#   sukisu-susfs    SukiSU-Ultra + SUSFS v2.2.0 + KPM     (same graft; shares weishu new-tree kprobe arch)
+#   resukisu-susfs  ReSukiSU + SUSFS v2.2.0               (native driver side; fs-side only)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ peridot-6.1.175 ]
+    paths-ignore: [ '**/*.md' ]
+
+concurrency:
+  group: theettam20-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  SUSFS_PIN: 8199bb6534174117ad907f726231484872ac345a   # susfs4ksu gki-android14-6.1 @ v2.2.0
+  KBUILD_BUILD_USER: build
+  KBUILD_BUILD_HOST: localhost
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: ksun-plain
+            label: KernelSU-Next v3.3.0 (plain)
+            repo: https://github.com/KernelSU-Next/KernelSU-Next
+            clone_args: --depth=1 --branch v3.3.0
+            pin: ''
+            susfs: none
+            kpm: 'false'
+            zipname: KSUN3.3.0
+          - id: ksun-susfs
+            label: KernelSU-Next v3.3.0 + SUSFS v2.2.0
+            repo: https://github.com/KernelSU-Next/KernelSU-Next
+            clone_args: --depth=1 --branch v3.3.0
+            pin: ''
+            susfs: shim
+            kpm: 'false'
+            zipname: KSUN3.3.0-SUSFS2.2.0
+          - id: sukisu-susfs
+            label: SukiSU-Ultra + SUSFS v2.2.0 (KPM)
+            repo: https://github.com/ShirkNeko/SukiSU-Ultra
+            clone_args: -b susfs_new
+            pin: 278d822a4ebd214bcfd774b7910cb11cdc560bb9
+            susfs: shim
+            kpm: 'true'
+            zipname: SukiSU-Ultra-SUSFS2.2.0-KPM
+          - id: resukisu-susfs
+            label: ReSukiSU + SUSFS v2.2.0 (native)
+            repo: https://github.com/ReSukiSU/ReSukiSU
+            clone_args: ''
+            pin: c61e643aee4f1321583c98b00931f6eb90687819
+            susfs: native
+            kpm: 'false'
+            zipname: ReSukiSU-SUSFS2.2.0
+
+    name: ${{ matrix.label }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: peridot-6.1.175
+          fetch-depth: 1
+
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends bc bison flex build-essential \
+            libssl-dev libncurses-dev libelf-dev zlib1g-dev pkg-config git curl zip cpio \
+            kmod python3 ccache lld llvm dwarves
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ccache-t20-${{ matrix.id }}-${{ github.sha }}
+          restore-keys: |
+            ccache-t20-${{ matrix.id }}-
+            ccache-peridot175-
+      - id: clang
+        uses: actions/cache@v4
+        with:
+          path: ~/clang
+          key: clang-kei-r547379
+      - if: steps.clang.outputs.cache-hit != 'true'
+        run: rm -rf "$HOME/clang"; git clone --depth=1 https://gitlab.com/kei-space/clang/r547379 "$HOME/clang"
+      - run: echo "$HOME/clang/bin" >> "$GITHUB_PATH"
+
+      - name: Sanity — base must be 6.1.175
+        run: |
+          set -euo pipefail
+          grep -q '^SUBLEVEL = 175' Makefile || { echo "::error::base is not 6.1.175"; exit 1; }
+          grep -q '^CONFIG_SCHED_BORE=y' arch/arm64/configs/gki_defconfig || { echo "::error::BORE missing"; exit 1; }
+          grep -q '^CONFIG_MQ_IOSCHED_ADIOS=y' arch/arm64/configs/gki_defconfig || { echo "::error::ADIOS missing"; exit 1; }
+          echo "✅ base 6.1.175 + BORE + ADIOS"
+
+      - name: Fetch root driver (${{ matrix.id }})
+        run: |
+          set -euo pipefail
+          git clone ${{ matrix.clone_args }} "${{ matrix.repo }}" KernelSU
+          if [ -n "${{ matrix.pin }}" ]; then git -C KernelSU checkout "${{ matrix.pin }}"; fi
+          echo "[i] driver @ $(git -C KernelSU rev-parse --short HEAD)  (${{ matrix.repo }})"
+
+      - name: Fetch susfs4ksu v2.2.0 (pinned)
+        if: matrix.susfs != 'none'
+        run: |
+          set -euo pipefail
+          git clone -b gki-android14-6.1 https://gitlab.com/simonpunk/susfs4ksu.git susfs4ksu
+          git -C susfs4ksu checkout "$SUSFS_PIN"
+          V="$(sed -n 's/.*SUSFS_VERSION[^"]*"\([^"]*\)".*/\1/p' susfs4ksu/kernel_patches/include/linux/susfs.h)"
+          echo "[i] SUSFS $V @ ${SUSFS_PIN:0:9}"
+          [ "$V" = "v2.2.0" ] || { echo "::error::expected SUSFS v2.2.0, got $V"; exit 1; }
+
+      - name: Wire driver into the kernel tree
+        run: |
+          set -euo pipefail
+          ln -sf ../KernelSU/kernel drivers/kernelsu
+          grep -q 'drivers/kernelsu/Kconfig' drivers/Kconfig || sed -i '/^endmenu/i source "drivers/kernelsu/Kconfig"' drivers/Kconfig
+          grep -q 'obj-$(CONFIG_KSU)' drivers/Makefile || printf '\nobj-$(CONFIG_KSU) += kernelsu/\n' >> drivers/Makefile
+
+      - name: Integrate SUSFS v2.2.0 — driver graft + fs-side
+        if: matrix.susfs == 'shim'
+        run: |
+          set -euo pipefail
+          bash scripts/susfs/integrate.sh "$PWD/KernelSU" "$PWD/susfs4ksu" "$PWD"
+          if find . -name '*.rej' | grep -q .; then echo "::error::rejects present"; find . -name '*.rej' -exec cat {} +; exit 1; fi
+
+      - name: Integrate SUSFS v2.2.0 — fs-side only (native driver)
+        if: matrix.susfs == 'native'
+        run: |
+          set -euo pipefail
+          bash scripts/susfs/integrate-native.sh "$PWD/susfs4ksu" "$PWD"
+          if find . -name '*.rej' | grep -q .; then echo "::error::rejects present"; find . -name '*.rej' -exec cat {} +; exit 1; fi
+
+      - name: Configure + build
+        run: |
+          set -euo pipefail
+          export ARCH=arm64 SUBARCH=arm64 PATH="$HOME/clang/bin:$PATH"
+          make -j"$(nproc --all)" O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 gki_defconfig
+          C=./scripts/config
+          $C --file out/.config -e KSU
+          if [ "${{ matrix.kpm }}" = "true" ]; then $C --file out/.config -e KPM || true; fi
+          if [ "${{ matrix.susfs }}" != "none" ]; then
+            for o in KSU_SUSFS KSU_SUSFS_SUS_PATH KSU_SUSFS_SUS_MOUNT KSU_SUSFS_SUS_KSTAT \
+                     KSU_SUSFS_SPOOF_UNAME KSU_SUSFS_ENABLE_LOG KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS \
+                     KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG KSU_SUSFS_OPEN_REDIRECT KSU_SUSFS_SUS_MAP; do
+              $C --file out/.config -e "$o"; done
+          fi
+          make -j"$(nproc --all)" O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 olddefconfig
+
+          echo "=== config verification ==="
+          grep -E '^CONFIG_KSU=y' out/.config || { echo "::error::KSU not enabled"; exit 1; }
+          grep -E '^CONFIG_SCHED_BORE=y' out/.config || { echo "::error::BORE not enabled"; exit 1; }
+          grep -E '^CONFIG_MQ_IOSCHED_ADIOS=y' out/.config || { echo "::error::ADIOS not enabled"; exit 1; }
+          if [ "${{ matrix.susfs }}" != "none" ]; then
+            grep -E '^CONFIG_KSU_SUSFS.*=y' out/.config | tee /tmp/susfscfg
+            test -s /tmp/susfscfg || { echo "::error::SUSFS not enabled in .config"; exit 1; }
+          fi
+          if [ "${{ matrix.kpm }}" = "true" ]; then grep -E '^CONFIG_KPM=y' out/.config || echo "note: KPM not enabled"; fi
+
+          export KBUILD_COMPILER_STRING="$(clang --version | head -n1)"
+          make -j"$(nproc --all)" O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CC="ccache clang" 2>&1 | tee build.log
+
+      - name: Package flashable zip
+        run: |
+          set -euo pipefail
+          IMG=out/arch/arm64/boot/Image; [ -f "$IMG" ] || { echo "::error::no Image"; exit 1; }
+          rm -rf AnyKernel3; cp -r anykernel AnyKernel3; cp "$IMG" AnyKernel3/Image
+          VER="$(cat out/include/config/kernel.release 2>/dev/null || echo 6.1.175)"
+          ZIP="Theettam-2.0-${{ matrix.zipname }}-peridot-${VER}.zip"
+          ( cd AnyKernel3 && zip -r9 "../$ZIP" . -x '.git*' )
+          echo "ZIP=$ZIP" >> "$GITHUB_ENV"
+          echo "KREL=$VER" >> "$GITHUB_ENV"
+          echo "✅ $ZIP  ($(stat -c%s "$ZIP") bytes, kernel.release=$VER)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zip-${{ matrix.id }}
+          path: ${{ env.ZIP }}
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: log-${{ matrix.id }}
+          path: build.log
+          if-no-files-found: ignore
+
+  release:
+    needs: build
+    if: success()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: zip-*
+          path: zips
+          merge-multiple: true
+      - run: ls -lh zips/
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v2.0-${{ github.run_number }}
+          prerelease: true
+          name: Theettam 2.0 — peridot 6.1.175 (4 root flavors)
+          body: |
+            **peridot 6.1.175** — first LTS bump past 173 for this device, via a real
+            3-way merge of ACK `android14-6.1-lts` (`android14-6.1.175_r00`).
+            Base boot-confirmed on-device. **Root flavors below are COMPILE-verified only —
+            boot-test with a backup and fastboot recovery ready.**
+
+            ## Pick one
+
+            | Zip | Root | SUSFS | Notes |
+            |---|---|---|---|
+            | `KSUN3.3.0` | KernelSU-Next v3.3.0 | — | plain root, smallest surface |
+            | `KSUN3.3.0-SUSFS2.2.0` | KernelSU-Next v3.3.0 | v2.2.0 | recommended |
+            | `SukiSU-Ultra-SUSFS2.2.0-KPM` | SukiSU-Ultra | v2.2.0 | adds KPM (Kernel Patch Module) |
+            | `ReSukiSU-SUSFS2.2.0` | ReSukiSU | v2.2.0 | native susfs driver side |
+
+            Use the manager matching your flavor. Flash with AnyKernel3 (Image only —
+            stock `vendor_dlkm` is kept).
+
+            ## What's new since 1.9-vali
+            - **6.1.173 → 6.1.175** — full ACK `android14-6.1-lts` merge (1010 commits,
+              838 files auto-merged, 6 conflicts resolved toward the device side)
+            - **BORE** CPU scheduler (`sysctl kernel.sched_bore=0` disables at runtime)
+            - **ADIOS** I/O scheduler (default)
+            - Everything from 1.9-vali carried over — zero defconfig regressions
+              (BBRv3 + PLB, MGLRU, fq_codel, HZ=300, UCLAMP, WireGuard)
+
+            Fallback: **v1.9-vali** (6.1.173) remains available and boot-proven.
+          files: zips/*.zip
