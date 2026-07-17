@@ -129,7 +129,11 @@ def main():
             print("- **ACK LTS bump** — merge `android14-6.1-lts` with a real 3-way merge from a "
                   "full-history clone of the device base; resolve conflicts toward the device side. "
                   "Do not apply mainline incrementals, and do not release without booting it.")
-        if any(k != "ack" for k, _, _, _ in drifted):
+        if any(k == "guidixx" for k, _, _, _ in drifted):
+            print("- **Device base bump** — GuidixX has new peridot commits. Merge `16.2` into the "
+                  "kernel branch (do not cherry-pick: the boot-safety reverts only make sense as a "
+                  "set). Re-check that the merge keeps them, then boot-test.")
+        if any(k not in ("ack", "guidixx") for k, _, _, _ in drifted):
             print("- **Driver/SUSFS bump** — update the pin in `.github/workflows/build-theettam-20.yml`, "
                   "run that workflow, and boot-test before promoting. The SUSFS hand-port grafts onto "
                   "driver internals, so a bump can move the anchors: if `integrate*.sh` asserts, the "

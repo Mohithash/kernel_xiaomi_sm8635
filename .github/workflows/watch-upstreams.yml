@@ -1,6 +1,7 @@
 name: watch upstreams
 
-# Daily check for new ACK LTS tags and new KernelSU-family / SUSFS upstreams.
+# Twice-monthly check for new ACK LTS tags, a moved device base (GuidixX), and new
+# KernelSU-family / SUSFS upstreams.
 #
 # This workflow REPORTS. It does not bump pins, and it does not release. A kernel
 # that compiles is not a kernel that boots: the 6.1.175 merge needed six conflicts
@@ -15,7 +16,9 @@ name: watch upstreams
 
 on:
   schedule:
-    - cron: '0 6 * * *'   # 06:00 UTC daily
+    # 06:00 UTC on the 1st and 15th. GitHub cron has no real fortnightly field, and
+    # '*/14' would restart each month (1, 15, 29 -> then 1 again, two days later).
+    - cron: '0 6 1,15 * *'
   workflow_dispatch:
 
 permissions:
