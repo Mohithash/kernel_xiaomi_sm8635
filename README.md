@@ -29,15 +29,20 @@ Four root flavors. Pick the exact root + hiding stack you want.
 | **KSUN + SUSFS** ⭐ | KernelSU-Next v3.3.0 | `v2.2.0` | — | KernelSU-Next | Root **+ full hiding** — start here |
 | **SukiSU-Ultra + SUSFS** | SukiSU-Ultra | `v2.2.0` | ✅ | SukiSU | Root + hiding **+ Kernel Patch Modules** |
 | **ReSukiSU + SUSFS** | ReSukiSU | `v2.2.0` *(native)* | — | ReSukiSU | Root + hiding, **cleanest integration** |
+| **KSUN + SUSFS + DroidSpaces** 🧪 | KernelSU-Next v3.3.0 | `v2.2.0` | — | KernelSU-Next | **Experimental** — LXC containers. [Separate release ↓](../../releases/tag/droidspaces-v1) |
 
-### **[⬇  Download latest](../../releases/latest)**
+### **[⬇  Download latest](../../releases/latest)**   ·   **[🧪 DroidSpaces (experimental) →](../../releases/tag/droidspaces-v1)**
 
 </div>
 
 > [!NOTE]
 > KSUN and SukiSU don't ship kernel-side SUSFS — those builds use a **hand-authored port** written for this
 > kernel. ReSukiSU implements SUSFS natively, so its pairing is the cleanest.
-> **All four are boot-tested on peridot at 6.1.175**, as is the bare base.
+> **The four flavors above are boot-tested on peridot at 6.1.175**, as is the bare base.
+>
+> The DroidSpaces row is **not** one of those four — it's a separate, experimental release (one device,
+> one test session; bootlooped twice before the working config was found). Details in the "Experimental:
+> DroidSpaces" section below, or the [release notes](../../releases/tag/droidspaces-v1) directly.
 
 > [!WARNING]
 > Flash with a **full backup and fastboot recovery ready**. Back up `boot.img` and `vendor_boot.img` first.
