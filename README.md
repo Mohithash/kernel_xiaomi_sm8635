@@ -120,16 +120,19 @@ AnyKernel3 flashes the **`Image` only** — your stock `vendor_dlkm` is kept.
 
 ## <img src="https://img.shields.io/badge/-04-fbbf24?style=flat-square" height="18"> Building
 
+The kernel source and its CI live on the **[`peridot-6.1.175`](../../tree/peridot-6.1.175)** branch —
+`main` carries the docs.
+
 ```bash
-# The four flavors build from one matrix workflow:
+# all four flavors build from one matrix workflow
 .github/workflows/build-theettam-20.yml
 
-# SUSFS integration (hand-port + native pairing):
+# SUSFS integration — hand-port, and the native pairing
 scripts/susfs/integrate.sh          # KernelSU-Next
 scripts/susfs/integrate-sukisu.sh   # SukiSU-Ultra
 scripts/susfs/integrate-native.sh   # ReSukiSU (fs-side only)
 
-# Pinned upstreams, checked automatically on the 5th and 20th:
+# pinned upstreams, checked on the 5th and 20th
 upstreams.json  ·  scripts/ci/check-upstreams.py
 ```
 
