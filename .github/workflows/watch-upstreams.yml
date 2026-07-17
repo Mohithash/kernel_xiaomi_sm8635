@@ -1,0 +1,156 @@
+name: watch upstreams
+
+# Daily check for new ACK LTS tags and new KernelSU-family / SUSFS upstreams.
+#
+# This workflow REPORTS. It does not bump pins, and it does not release. A kernel
+# that compiles is not a kernel that boots: the 6.1.175 merge needed six conflicts
+# resolved by hand plus an hrtimer and an extract-cert fix, and none of that is
+# mechanisable. Discovery is automated; shipping stays a human decision that
+# follows a boot test.
+#
+#   drift found  -> opens/updates one tracking issue
+#   ACK drift    -> additionally attempts the merge on a scratch ref and reports
+#                   the conflict set, so the work is scoped before you start
+#   nothing new  -> closes the issue, stays quiet
+
+on:
+  schedule:
+    - cron: '0 6 * * *'   # 06:00 UTC daily
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: watch-upstreams
+  cancel-in-progress: false
+
+env:
+  ISSUE_TITLE: "Upstream drift: new ACK / root-driver / SUSFS available"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      drift: ${{ steps.chk.outputs.drift }}
+      ack_drift: ${{ steps.chk.outputs.ack_drift }}
+      summary: ${{ steps.chk.outputs.summary }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: peridot-6.1.175
+          fetch-depth: 1
+
+      - id: chk
+        name: Compare pins against upstreams
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 scripts/ci/check-upstreams.py | tee report.md
+          {
+            echo "## Upstream check — $(date -u +%Y-%m-%d)"
+            echo ""
+            cat report.md
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: upstream-report
+          path: report.md
+
+  # A new ACK tag is the expensive case, so scope it before a human starts: do the
+  # merge on a throwaway ref and report exactly which files conflict. Nothing is
+  # pushed — the value is knowing whether it is 6 conflicts or 600.
+  ack_dry_run:
+    needs: check
+    if: needs.check.outputs.ack_drift == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Merge ACK onto the device base (dry run, never pushed)
+        run: |
+          set -euo pipefail
+          git config --global user.email "ci@localhost"
+          git config --global user.name "ci"
+          echo "::group::clone device base (full history — needed for a merge-base)"
+          git clone --filter=blob:none https://github.com/Mohithash/kernel_xiaomi_sm8635.git k
+          cd k && git checkout peridot-6.1.175
+          echo "::endgroup::"
+          git remote add ack https://android.googlesource.com/kernel/common
+          TAG=$(git ls-remote --tags ack 'refs/tags/android14-6.1.*_r00' \
+                | sed 's|.*refs/tags/||; s|\^{}||' | sort -t. -k3 -n | tail -1)
+          echo "newest ACK tag: $TAG"
+          git fetch -q --no-tags ack "refs/tags/$TAG:refs/tags/$TAG"
+          echo "merge-base: $(git merge-base HEAD "$TAG" | head -c12)"
+          set +e
+          git merge --no-commit --no-ff "$TAG" > merge.log 2>&1
+          set -e
+          echo "### conflicts"
+          git diff --name-only --diff-filter=U | tee conflicts.txt
+          echo "count: $(wc -l < conflicts.txt)"
+          echo "auto-merged cleanly: $(git diff --cached --name-only | wc -l) files"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ack-merge-dryrun
+          path: |
+            k/merge.log
+            k/conflicts.txt
+          if-no-files-found: ignore
+
+  report:
+    needs: [check, ack_dry_run]
+    if: always() && needs.check.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: upstream-report }
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('report.md', 'utf8');
+            const drift = '${{ needs.check.outputs.drift }}' === 'true';
+            const title = process.env.ISSUE_TITLE;
+
+            const found = await github.rest.search.issuesAndPullRequests({
+              q: `repo:${context.repo.owner}/${context.repo.repo} is:issue is:open in:title "${title}"`,
+            });
+            const existing = found.data.items[0];
+
+            if (!drift) {
+              if (existing) {
+                await github.rest.issues.createComment({
+                  ...context.repo, issue_number: existing.number,
+                  body: 'All pins current again — closing.',
+                });
+                await github.rest.issues.update({
+                  ...context.repo, issue_number: existing.number, state: 'closed',
+                });
+              }
+              core.info('No drift.');
+              return;
+            }
+
+            const note = [
+              body,
+              '',
+              '---',
+              '*Reported by `watch-upstreams`. Nothing has been bumped, built, or released —',
+              'update the pin, run the build workflow, then boot-test before promoting.*',
+            ].join('\n');
+
+            if (existing) {
+              await github.rest.issues.update({
+                ...context.repo, issue_number: existing.number, body: note,
+              });
+              core.info(`Updated issue #${existing.number}`);
+            } else {
+              const made = await github.rest.issues.create({
+                ...context.repo, title, body: note,
+              });
+              core.info(`Opened issue #${made.data.number}`);
+            }
+        env:
+          ISSUE_TITLE: ${{ env.ISSUE_TITLE }}
