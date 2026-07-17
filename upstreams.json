@@ -1,0 +1,39 @@
+{
+  "_comment": "Pinned upstreams for the Theettam peridot kernel. scripts/ci/check-upstreams.py compares these against the real upstreams and reports drift. Bumping a pin here does NOT rebuild anything by itself — the build workflow carries its own pins, and they are meant to be updated together in a reviewed commit.",
+  "ack": {
+    "name": "Android Common Kernel (android14-6.1-lts)",
+    "kind": "git-tags",
+    "url": "https://android.googlesource.com/kernel/common",
+    "tag_glob": "refs/tags/android14-6.1.*_r00",
+    "current": "android14-6.1.175_r00",
+    "note": "A new LTS tag needs a real 3-way merge with hand-resolved conflicts. Never auto-merge to a release."
+  },
+  "ksun": {
+    "name": "KernelSU-Next",
+    "kind": "github-tags",
+    "repo": "KernelSU-Next/KernelSU-Next",
+    "current": "v3.3.0"
+  },
+  "sukisu": {
+    "name": "SukiSU-Ultra (susfs_new)",
+    "kind": "github-branch",
+    "repo": "ShirkNeko/SukiSU-Ultra",
+    "branch": "susfs_new",
+    "current": "278d822a4ebd214bcfd774b7910cb11cdc560bb9"
+  },
+  "resukisu": {
+    "name": "ReSukiSU",
+    "kind": "github-branch",
+    "repo": "ReSukiSU/ReSukiSU",
+    "branch": "main",
+    "current": "c61e643aee4f1321583c98b00931f6eb90687819"
+  },
+  "susfs": {
+    "name": "susfs4ksu (gki-android14-6.1)",
+    "kind": "gitlab-branch",
+    "project": "simonpunk/susfs4ksu",
+    "branch": "gki-android14-6.1",
+    "current": "8199bb6534174117ad907f726231484872ac345a",
+    "note": "v2.2.0. The hand-port grafts susfs's CMD dispatch into the driver's reboot kprobe; a susfs bump can move the anchors, so integrate.sh may need work."
+  }
+}
