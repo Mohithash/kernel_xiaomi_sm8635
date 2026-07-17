@@ -61,6 +61,16 @@ jobs:
             script: integrate-sukisu.sh
             kpm: 'true'
             zipname: SukiSU-Ultra-SUSFS2.2.0-KPM
+          - id: ksun-susfs-droidspaces
+            label: KernelSU-Next + SUSFS + DroidSpaces (experimental)
+            repo: https://github.com/KernelSU-Next/KernelSU-Next
+            clone_args: --depth=1 --branch v3.3.0
+            pin: ''
+            susfs: shim
+            script: integrate.sh
+            droidspaces: 'true'
+            kpm: 'false'
+            zipname: KSUN3.3.0-SUSFS2.2.0-DroidSpaces-EXPERIMENTAL
           - id: resukisu-susfs
             label: ReSukiSU + SUSFS v2.2.0 (native)
             repo: https://github.com/ReSukiSU/ReSukiSU
@@ -149,6 +159,19 @@ jobs:
           bash scripts/susfs/integrate-native.sh "$PWD/susfs4ksu" "$PWD"
           if find . -name '*.rej' | grep -q .; then echo "::error::rejects present"; find . -name '*.rej' -exec cat {} +; exit 1; fi
 
+      - name: Integrate DroidSpaces — relocate SYSVIPC out of task_struct
+        if: matrix.droidspaces == 'true'
+        run: |
+          set -euo pipefail
+          bash scripts/droidspaces/integrate.sh "$PWD"
+          # The relocation is the whole ballgame: if sysvsem/sysvshm are still declared
+          # in their original position, every vendor module reads shifted offsets.
+          grep -q 'ANDROID_KABI_USE(6, struct sysv_sem sysvsem)' include/linux/sched.h \
+            || { echo "::error::SYSVIPC relocation missing"; exit 1; }
+          grep -qE '^\s*/\* struct sysv_sem' include/linux/sched.h \
+            || { echo "::error::original sysvsem declaration still live"; exit 1; }
+          echo "✅ SYSVIPC relocated into KABI reserve slots 6/7/8"
+
       - name: Configure + build
         run: |
           set -euo pipefail
@@ -163,6 +186,10 @@ jobs:
                      KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG KSU_SUSFS_OPEN_REDIRECT KSU_SUSFS_SUS_MAP; do
               $C --file out/.config -e "$o"; done
           fi
+          if [ "${{ matrix.droidspaces }}" = "true" ]; then
+            for o in $(grep -v '^#' scripts/droidspaces/droidspaces.config); do
+              $C --file out/.config -e "$o"; done
+          fi
           make -j"$(nproc --all)" O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 olddefconfig
 
           echo "=== config verification ==="
@@ -174,6 +201,14 @@ jobs:
             test -s /tmp/susfscfg || { echo "::error::SUSFS not enabled in .config"; exit 1; }
           fi
           if [ "${{ matrix.kpm }}" = "true" ]; then grep -E '^CONFIG_KPM=y' out/.config || echo "note: KPM not enabled"; fi
+          if [ "${{ matrix.droidspaces }}" = "true" ]; then
+            miss=0
+            for o in $(grep -v '^#' scripts/droidspaces/droidspaces.config); do
+              grep -qE "^CONFIG_$o=y" out/.config || { echo "::error::CONFIG_$o did not enable"; miss=1; }
+            done
+            [ "$miss" = "0" ] || exit 1
+            echo "✅ all 11 DroidSpaces options enabled"
+          fi
 
           export KBUILD_COMPILER_STRING="$(clang --version | head -n1)"
           make -j"$(nproc --all)" O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CC="ccache clang" 2>&1 | tee build.log
