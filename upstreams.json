@@ -25,7 +25,7 @@
   "sukisu": {
     "name": "SukiSU-Ultra (susfs_new)",
     "kind": "github-branch",
-    "repo": "ShirkNeko/SukiSU-Ultra",
+    "repo": "SukiSU-Ultra/SukiSU-Ultra",
     "branch": "susfs_new",
     "current": "278d822a4ebd214bcfd774b7910cb11cdc560bb9"
   },
@@ -34,7 +34,7 @@
     "kind": "github-branch",
     "repo": "ReSukiSU/ReSukiSU",
     "branch": "main",
-    "current": "c61e643aee4f1321583c98b00931f6eb90687819"
+    "current": "aa32736680c91705ef68ab634cf276a7c42612d4"
   },
   "susfs": {
     "name": "susfs4ksu (gki-android14-6.1)",
