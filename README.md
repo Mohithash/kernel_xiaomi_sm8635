@@ -9,6 +9,7 @@
 [![SUSFS](https://img.shields.io/badge/SUSFS-v2.2.0-c084fc?style=for-the-badge&labelColor=0b1020)](https://gitlab.com/simonpunk/susfs4ksu)
 [![Downloads](https://img.shields.io/github/downloads/Mohithash/kernel_xiaomi_sm8635/total?style=for-the-badge&label=DOWNLOADS&labelColor=0b1020&color=fbbf24)](../../releases)
 [![License](https://img.shields.io/badge/license-GPL--2.0-60a5fa?style=for-the-badge&labelColor=0b1020)](COPYING)
+[![Boot tested](https://img.shields.io/badge/all%204%20flavors-boot%20tested-4ade80?style=for-the-badge&labelColor=0b1020)](../../releases/latest)
 
 **A custom GKI kernel for the Xiaomi `peridot` — POCO F6 / Redmi Turbo 3 (Snapdragon 8s Gen 3)**
 
@@ -35,7 +36,8 @@ Four root flavors. Pick the exact root + hiding stack you want.
 
 > [!NOTE]
 > KSUN and SukiSU don't ship kernel-side SUSFS — those builds use a **hand-authored port** written for this
-> kernel. ReSukiSU implements SUSFS natively, so its pairing is the cleanest. All four boot on peridot.
+> kernel. ReSukiSU implements SUSFS natively, so its pairing is the cleanest.
+> **All four are boot-tested on peridot at 6.1.175**, as is the bare base.
 
 > [!WARNING]
 > Flash with a **full backup and fastboot recovery ready**. Back up `boot.img` and `vendor_boot.img` first.
