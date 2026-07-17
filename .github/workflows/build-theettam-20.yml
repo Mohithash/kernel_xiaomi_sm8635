@@ -217,34 +217,14 @@ jobs:
       - run: ls -lh zips/
       - uses: softprops/action-gh-release@v2
         with:
-          tag_name: v2.0-${{ github.run_number }}
+          tag_name: ci-2.0-${{ github.run_number }}
           prerelease: true
-          name: Theettam 2.0 — peridot 6.1.175 (4 root flavors)
+          name: 2.0 CI build #${{ github.run_number }} (compile-verified, untested)
           body: |
-            **peridot 6.1.175** — first LTS bump past 173 for this device, via a real
-            3-way merge of ACK `android14-6.1-lts` (`android14-6.1.175_r00`).
-            Base boot-confirmed on-device. **Root flavors below are COMPILE-verified only —
-            boot-test with a backup and fastboot recovery ready.**
+            > [!IMPORTANT]
+            > **CI test build, not a release. Most people want the latest published release** —
+            > those are boot-tested. This is compile-verified only.
 
-            ## Pick one
-
-            | Zip | Root | SUSFS | Notes |
-            |---|---|---|---|
-            | `KSUN3.3.0` | KernelSU-Next v3.3.0 | — | plain root, smallest surface |
-            | `KSUN3.3.0-SUSFS2.2.0` | KernelSU-Next v3.3.0 | v2.2.0 | recommended |
-            | `SukiSU-Ultra-SUSFS2.2.0-KPM` | SukiSU-Ultra | v2.2.0 | adds KPM (Kernel Patch Module) |
-            | `ReSukiSU-SUSFS2.2.0` | ReSukiSU | v2.2.0 | native susfs driver side |
-
-            Use the manager matching your flavor. Flash with AnyKernel3 (Image only —
-            stock `vendor_dlkm` is kept).
-
-            ## What's new since 1.9-vali
-            - **6.1.173 → 6.1.175** — full ACK `android14-6.1-lts` merge (1010 commits,
-              838 files auto-merged, 6 conflicts resolved toward the device side)
-            - **BORE** CPU scheduler (`sysctl kernel.sched_bore=0` disables at runtime)
-            - **ADIOS** I/O scheduler (default)
-            - Everything from 1.9-vali carried over — zero defconfig regressions
-              (BBRv3 + PLB, MGLRU, fq_codel, HZ=300, UCLAMP, WireGuard)
-
-            Fallback: **v1.9-vali** (6.1.173) remains available and boot-proven.
+            Built from `${{ github.sha }}` on `peridot-6.1.175`. Flash only if you mean to test
+            this build, with a backup and fastboot recovery ready.
           files: zips/*.zip
