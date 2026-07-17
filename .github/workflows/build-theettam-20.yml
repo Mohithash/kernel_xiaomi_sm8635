@@ -204,7 +204,9 @@ jobs:
 
   release:
     needs: build
-    if: success()
+    # Publish only on a deliberate manual run. A plain push to this branch builds and
+    # compile-verifies the four flavors but must not mint a release of its own.
+    if: success() && github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
