@@ -44,7 +44,62 @@ Four root flavors. Pick the exact root + hiding stack you want.
 
 ---
 
-## <img src="https://img.shields.io/badge/-02-c084fc?style=flat-square" height="18"> Features
+## <img src="https://img.shields.io/badge/-02-8b5cf6?style=flat-square" height="18"> Experimental: DroidSpaces (LXC containers)
+
+A 5th flavor — KernelSU-Next + SUSFS + [DroidSpaces](https://github.com/ravindu644/Droidspaces-OSS)
+(run real Linux containers, e.g. a full Alpine or Debian, natively on-device). **Separate release,
+not part of the 4 flavors above:** **[droidspaces-v1 →](../../releases/tag/droidspaces-v1)**
+
+> [!IMPORTANT]
+> Boot-tested and containers confirmed working on one device — see the raw evidence in the release
+> notes. Still **EXPERIMENTAL**: one device, one test session. Flash with a backup and fastboot
+> recovery ready, same as always.
+
+<details>
+<summary><b>🔍 What it took to get here — two bootloops, and what actually caused them</b></summary>
+
+<br>
+
+DroidSpaces needs `CONFIG_SYSVIPC`, which normally breaks Android's frozen kernel-module ABI (KABI):
+it inserts `sysvsem`/`sysvshm` into the middle of `task_struct`, shifting every field after them —
+and prebuilt vendor modules (display, touch, camera, UFS) are linked against the *original* layout.
+Fixed by relocating those fields into the `ANDROID_KABI_RESERVE` padding slots ACK ships for exactly
+this purpose (`scripts/droidspaces/integrate.sh`) — confirmed KABI-neutral by hand-building
+`scripts/genksyms` and diffing the checksums against the boot-tested base: identical.
+
+That fix alone still bootlooped, twice:
+
+| Attempt | Configs enabled | What broke |
+|:--|:--|:--|
+| 1st | `CGROUP_DEVICE` + `CGROUP_PIDS` | Grew `enum cgroup_subsys_id`, resizing `struct css_set.subsys[]` — shifted the genksyms checksum for `__put_task_struct` and everything reachable from `task_struct` |
+| 2nd | `BRIDGE_NETFILTER` + `NF_TABLES` | Independently shifted the checksum for 113 of 115 exports in `kernel/sched/core.c` (`wake_up_process`, `sched_setscheduler`, `set_cpus_allowed_ptr`, `runqueues`, …) |
+
+Both pairs were isolated by hand-diffing genksyms output against the boot-tested base — not guessed —
+and both are now removed. **Important honesty note:** on-device logs from the eventual successful boot
+show this vendor kernel tolerates ~1,791 other symbol-checksum disagreements as non-fatal
+`"...but ignore"` warnings by default. So "checksum shifted → hard module rejection" isn't a fully
+confirmed mechanism — it's the strongest available explanation for a correlation that held twice in a
+controlled test (remove the pair, boot succeeds), not a proven causal chain.
+
+**Lost as a result:** no per-device cgroup allowlisting, no `--pids-limit` enforcement, no in-container
+nftables/bridge-netfilter. Basic container networking (`veth`/`bridge`/NAT, already enabled) is
+unaffected.
+
+**On-device, after the fix:** no hard module-load rejection; no panic/oops/BUG since boot; 300 fork/exit
+cycles inside a stress-tested PID+USER namespace with zero faults; real PID/mnt/net/ipc/uts/cgroup
+namespace isolation; a full Alpine Linux 3.23.5 container booted via the DroidSpaces binary with
+`init`+`dhcpcd`+`sshd`+`getty` running, confirmed by reading the container's actual rootfs at
+`/proc/<pid>/root/etc/alpine-release` rather than trusting the tool's own report. Raw command output
+for all of this is in the [release notes](../../releases/tag/droidspaces-v1).
+
+Container root is *not* isolated from host root — DroidSpaces shares the user namespace by config
+(`allow_userns=0`) in this mode. Standard LXC-mode behavior, not a defect, but worth knowing if you're
+relying on the container as a privilege boundary.
+
+</details>
+
+
+## <img src="https://img.shields.io/badge/-03-c084fc?style=flat-square" height="18"> Features
 
 Everything below is read from the **resolved config**, not the defconfig — a Kconfig `default y`
 symbol ships without appearing in a defconfig, and a defconfig line can be overridden.
@@ -93,7 +148,7 @@ tooling (bpftrace, CO-RE programs) can't run. Here it does.
 
 ---
 
-## <img src="https://img.shields.io/badge/-03-4ade80?style=flat-square" height="18"> Why this combination
+## <img src="https://img.shields.io/badge/-04-4ade80?style=flat-square" height="18"> Why this combination
 
 Each addition targets a **different** bottleneck, which is why they compose instead of fighting:
 
@@ -116,7 +171,7 @@ The pattern is the same throughout: **add what addresses a real bottleneck, leav
 
 ---
 
-## <img src="https://img.shields.io/badge/-04-4ade80?style=flat-square" height="18"> Flashing
+## <img src="https://img.shields.io/badge/-05-4ade80?style=flat-square" height="18"> Flashing
 
 ```bash
 1.  Download the ZIP for your flavor from Releases
@@ -130,7 +185,7 @@ AnyKernel3 flashes the **`Image` only** — your stock `vendor_dlkm` is kept.
 
 ---
 
-## <img src="https://img.shields.io/badge/-05-f87171?style=flat-square" height="18"> Root or modules not mounting?
+## <img src="https://img.shields.io/badge/-06-f87171?style=flat-square" height="18"> Root or modules not mounting?
 
 **Most common cause: more than one KernelSU-family manager installed.** Each flavor pairs with exactly
 one manager, and the kernel crowns a single manager app at boot. With KernelSU-Next, SukiSU and ReSukiSU
@@ -158,7 +213,7 @@ enough to tell a crowning problem from a real bug.
 
 ---
 
-## <img src="https://img.shields.io/badge/-06-fbbf24?style=flat-square" height="18"> Building
+## <img src="https://img.shields.io/badge/-07-fbbf24?style=flat-square" height="18"> Building
 
 The kernel source and its CI live on the **[`peridot-6.1.175`](../../tree/peridot-6.1.175)** branch —
 `main` carries the docs.
@@ -181,7 +236,7 @@ build loudly instead of quietly building someone else's tree.
 
 ---
 
-## <img src="https://img.shields.io/badge/-07-c084fc?style=flat-square" height="18"> Writeup
+## <img src="https://img.shields.io/badge/-08-c084fc?style=flat-square" height="18"> Writeup
 
 **[Upgrading an Android GKI device kernel to a newer LTS →](docs/upgrading-gki-device-kernel-lts.md)**
 
@@ -191,7 +246,7 @@ Written from the 6.1.173 → 6.1.175 bump — 1010 commits, six conflicts, every
 
 ---
 
-## <img src="https://img.shields.io/badge/-08-60a5fa?style=flat-square" height="18"> Credits & upstreams
+## <img src="https://img.shields.io/badge/-09-60a5fa?style=flat-square" height="18"> Credits & upstreams
 
 Built on GPL-2.0 upstreams — thanks to their authors:
 
