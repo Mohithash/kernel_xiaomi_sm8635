@@ -16,9 +16,10 @@ name: watch upstreams
 
 on:
   schedule:
-    # 06:00 UTC on the 1st and 15th. GitHub cron has no real fortnightly field, and
-    # '*/14' would restart each month (1, 15, 29 -> then 1 again, two days later).
-    - cron: '0 6 1,15 * *'
+    # 06:00 UTC on the 5th and 20th -- 15 days apart, and 15/16 across the month end.
+    # GitHub cron has no fortnightly field, and '*/14' would restart each month
+    # (5, 19 -> then 5 again, well short of two weeks).
+    - cron: '0 6 5,20 * *'
   workflow_dispatch:
 
 permissions:
