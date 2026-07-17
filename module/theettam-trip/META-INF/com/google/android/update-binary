@@ -1,12 +1,16 @@
 #!/sbin/sh
-#################
-# Initialization
-#################
 umask 022
 OUTFD=$2
 ZIPFILE=$3
 mount /data 2>/dev/null
-[ -f /data/adb/magisk/util_functions.sh ] && . /data/adb/magisk/util_functions.sh
-[ -f /data/adb/ksu/util_functions.sh ] && . /data/adb/ksu/util_functions.sh
+if [ -f /data/adb/ksu/bin/busybox ]; then
+  . /data/adb/ksu/util_functions.sh
+elif [ -f /data/adb/magisk/util_functions.sh ]; then
+  . /data/adb/magisk/util_functions.sh
+elif [ -f /data/adb/ap/util_functions.sh ]; then
+  . /data/adb/ap/util_functions.sh
+else
+  echo "! No KernelSU / Magisk / APatch found"; exit 1
+fi
 install_module
 exit 0
