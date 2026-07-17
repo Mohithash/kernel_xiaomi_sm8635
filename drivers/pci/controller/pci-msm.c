@@ -1341,11 +1341,10 @@ struct msm_pcie_dev_t {
 #endif
 
 	bool fmd_enable;
-	/* state of msm_msi_init() called or not */
-	bool msi_init;
 	bool ecam_mode;
 	int tc2bdf_tc_count;
 	u32 *save_sid_config;
+	struct irq_domain *msm_msi_domain;
 };
 
 struct msm_root_dev_t {
@@ -6801,8 +6800,8 @@ skip_link_enablement:
 	dev->link_turned_on_counter++;
 
 	if (dev->enumerated) {
-		if (!dev->lpi_enable)
-			msm_msi_config(dev_get_msi_domain(&dev->dev->dev));
+		if (!dev->lpi_enable && dev->msm_msi_domain)
+			msm_msi_config(dev->msm_msi_domain);
 		msm_pcie_config_link_pm(dev, true);
 	}
 
@@ -6870,9 +6869,8 @@ static void msm_pcie_disable(struct msm_pcie_dev_t *dev)
 	}
 
 	/* suspend access to MSI register. resume access in msm_msi_config */
-	if (!dev->lpi_enable)
-		msm_msi_config_access(dev_get_msi_domain(&dev->dev->dev),
-				      false);
+	if (!dev->lpi_enable && dev->msm_msi_domain)
+		msm_msi_config_access(dev->msm_msi_domain, false);
 
 	dev->link_status = MSM_PCIE_LINK_DISABLED;
 	dev->power_on = false;
@@ -7219,14 +7217,9 @@ int msm_pcie_enumerate(u32 rc_idx)
 
 	/* SPI based MSI (i.e. non-LPI) related functionality initialization */
 	if (!dev->lpi_enable) {
-		if (!dev->msi_init) {
 			ret = msm_msi_init(&dev->pdev->dev);
 			if (ret)
 				goto out;
-			dev->msi_init = true;
-		} else {
-			msm_msi_config_access(dev_get_msi_domain(&dev->dev->dev), true);
-		}
 	}
 
 	if (dev->ecam_mode) {
@@ -7316,8 +7309,34 @@ int msm_pcie_enumerate(u32 rc_idx)
 	if (dev->boot_option & MSM_PCIE_NO_PROBE_ENUMERATION)
 		dev_pm_syscore_device(&pcidev->dev, true);
 
+	/* Cache MSI domain once for SPI based MSI (i.e. non-LPI) related functionality. */
+	if (!dev->lpi_enable) {
+		unsigned long flags;
+
+		spin_lock_irqsave(&dev->cfg_lock, flags);
+		dev->msm_msi_domain = dev_get_msi_domain(&dev->dev->dev);
+		spin_unlock_irqrestore(&dev->cfg_lock, flags);
+		if (!dev->msm_msi_domain) {
+			PCIE_ERR(dev, "PCIe: RC%d: MSI domain not available\n",
+				dev->rc_idx);
+			ret = -ENODEV;
+			goto out_msi_cleanup;
+		}
+	}
+
 	pci_dev_put(pcidev);
 out:
+	mutex_unlock(&dev->enumerate_lock);
+
+	return ret;
+
+out_msi_cleanup:
+	if (!dev->lpi_enable) {
+		msm_msi_deinit(&dev->pdev->dev);
+		dev->msm_msi_domain = NULL;
+	}
+
+	pci_dev_put(pcidev);
 	mutex_unlock(&dev->enumerate_lock);
 
 	return ret;
@@ -7347,6 +7366,12 @@ int msm_pcie_deenumerate(u32 rc_idx)
 	spin_lock_irqsave(&dev->cfg_lock, dev->irqsave_flags);
 	dev->cfg_access = false;
 	spin_unlock_irqrestore(&dev->cfg_lock, dev->irqsave_flags);
+
+	/* Deinitialize MSI and drop the cached MSI domain */
+	if (!dev->lpi_enable) {
+		msm_msi_deinit(&dev->pdev->dev);
+		dev->msm_msi_domain = NULL;
+	}
 
 	pci_stop_root_bus(bridge->bus);
 	pci_remove_root_bus(bridge->bus);
@@ -10288,9 +10313,8 @@ static int __maybe_unused msm_pcie_pm_suspend_noirq(struct device *dev)
 				pcie_dev->irqsave_flags);
 
 		/* suspend access to MSI register. resume access in resume */
-		if (!pcie_dev->lpi_enable)
-			msm_msi_config_access(dev_get_msi_domain(&pcie_dev->dev->dev),
-					false);
+		if (!pcie_dev->lpi_enable && pcie_dev->msm_msi_domain)
+			msm_msi_config_access(pcie_dev->msm_msi_domain, false);
 
 		/*
 		 * When GDSC is turned off, it will reset controller and it can assert
@@ -10469,9 +10493,8 @@ static int __maybe_unused msm_pcie_pm_resume_noirq(struct device *dev)
 				pcie_dev->irqsave_flags);
 
 		/* resume access to MSI register as link is resumed */
-		if (!pcie_dev->lpi_enable)
-			msm_msi_config_access(dev_get_msi_domain(&pcie_dev->dev->dev),
-						true);
+		if (!pcie_dev->lpi_enable && pcie_dev->msm_msi_domain)
+			msm_msi_config_access(pcie_dev->msm_msi_domain, true);
 	}
 
 	mutex_unlock(&pcie_dev->recovery_lock);
@@ -11464,9 +11487,8 @@ static int msm_pcie_drv_resume(struct msm_pcie_dev_t *pcie_dev)
 	mutex_unlock(&pcie_dev->aspm_lock);
 
 	/* resume access to MSI register as link is resumed */
-	if (!pcie_dev->lpi_enable)
-		msm_msi_config_access(dev_get_msi_domain(&pcie_dev->dev->dev),
-				      true);
+	if (!pcie_dev->lpi_enable && pcie_dev->msm_msi_domain)
+		msm_msi_config_access(pcie_dev->msm_msi_domain, true);
 
 	if (!pcie_dev->pcie_sm)
 		enable_irq(pcie_dev->irq[MSM_PCIE_INT_GLOBAL_INT].num);
@@ -11513,9 +11535,8 @@ static int msm_pcie_drv_suspend(struct msm_pcie_dev_t *pcie_dev,
 	}
 
 	/* suspend access to MSI register. resume access in drv_resume */
-	if (!pcie_dev->lpi_enable)
-		msm_msi_config_access(dev_get_msi_domain(&pcie_dev->dev->dev),
-				      false);
+	if (!pcie_dev->lpi_enable && pcie_dev->msm_msi_domain)
+		msm_msi_config_access(pcie_dev->msm_msi_domain, false);
 
 	pcie_dev->user_suspend = true;
 	set_bit(pcie_dev->rc_idx, &pcie_drv.rc_drv_enabled);

@@ -2,7 +2,6 @@
 # Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
 
 blocklist 8250_of
-blocklist dummy_hcd
 blocklist llcc_perfmon
 blocklist tda18250
 blocklist tda9887

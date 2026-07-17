@@ -979,7 +979,7 @@ static int stm_suspend(struct device *dev)
 	struct stm_device	*stm_dev;
 	struct list_head	*head, *p;
 
-	if (pm_suspend_via_firmware()) {
+	if (pm_suspend_target_state == PM_SUSPEND_MEM) {
 		coresight_disable(drvdata->csdev);
 
 		stm_dev = drvdata->stm.stm;
@@ -999,7 +999,7 @@ static int stm_resume(struct device *dev)
 	struct stm_device	*stm_dev;
 	struct list_head	*head, *p;
 
-	if (pm_suspend_via_firmware()) {
+	if (pm_suspend_target_state == PM_SUSPEND_MEM) {
 		stm_dev = drvdata->stm.stm;
 		if (stm_dev) {
 			head = &stm_dev->link_list;

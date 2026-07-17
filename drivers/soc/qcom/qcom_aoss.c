@@ -633,7 +633,7 @@ static int aoss_qmp_mbox_suspend_noirq(struct device *dev)
 {
 	struct qmp *qmp = dev_get_drvdata(dev);
 
-	if (pm_suspend_via_firmware()) {
+	if (pm_suspend_target_state == PM_SUSPEND_MEM) {
 		qmp->ds_entry = true;
 		dev_info(dev, "AOSS: Deep sleep entry\n");
 	}
@@ -646,7 +646,7 @@ static int aoss_qmp_mbox_resume_early(struct device *dev)
 	struct qmp *qmp = dev_get_drvdata(dev);
 	int ret = 0;
 
-	if (pm_suspend_via_firmware()) {
+	if (pm_suspend_target_state == PM_SUSPEND_MEM) {
 		ret = qmp_open(qmp);
 
 		if (ret < 0)

@@ -18,6 +18,7 @@
 #define AUTH_SIZE		16
 #define AUTH_TAG		0xFF
 #define AUTHTAG			1
+#define PAGE_BATCH              5000
 #define QSEECOM_ALIGN_SIZE      0x40
 #define QSEECOM_ALIGN_MASK      (QSEECOM_ALIGN_SIZE - 1)
 #define QSEECOM_ALIGN(x)        \
@@ -100,6 +101,8 @@ static int blk_array_pos;
 static unsigned long nr_pages;
 static void *auth_slot;
 static int qtee_ret;
+static unsigned long page_counter;
+static unsigned long pages_since_last_log;
 
 static void init_sg(struct scatterlist *sg, void *data, unsigned int size)
 {
@@ -147,7 +150,8 @@ static void encrypt_page(void *data, void *buf)
 		ret = -ENOMEM;
 		goto err_aead;
 	}
-
+	page_counter++;
+	pages_since_last_log++;
 	crypto_init_wait(&wait);
 	aead_request_set_callback(req, CRYPTO_TFM_REQ_MAY_BACKLOG,
 				crypto_req_done, &wait);
@@ -185,6 +189,11 @@ static void encrypt_page(void *data, void *buf)
 
 	if (first_encrypt)
 		first_encrypt = 0;
+
+	if (pages_since_last_log >= PAGE_BATCH) {
+		pr_info("Encrypted %lu pages\n", page_counter);
+		pages_since_last_log = 0;
+	}
 
 out:
 	aead_request_free(req);
@@ -602,30 +611,52 @@ int key_restore(void)
 
 }
 
-int key_mgr_prepare(uint32_t event, const struct keymgr_key_info *key_info)
+static int key_mgr_prepare(void)
 {
+	int ret = 0;
+	struct keymgr_key_info *key_info;
+	struct keymgr_key_info_v2 *key_info_v2;
+
 	if (setup()) {
 		cleanup();
 		return -EINVAL;
 	}
-	int ret = key_manager_prepare(key_mgr_object, event, key_info);
+
+	key_info = kmalloc(sizeof(struct keymgr_key_info), GFP_KERNEL);
+	if (!key_info)
+		return -ENOMEM;
+
+	key_info_v2 = kmalloc(sizeof(struct keymgr_key_info_v2), GFP_KERNEL);
+	if (!key_info_v2) {
+		kfree(key_info);
+		return -ENOMEM;
+	}
+
+	key_info->key_size = AES256_KEY_SIZE;
+	key_info->reserved = 0;
+	key_info_v2->key_size = AES256_KEY_SIZE;
+
+	ret = key_manager_prepare_v2(key_mgr_object,
+				     KEY_MGR_HIBERNATE_WITH_ENCRYPTION, key_info_v2);
+	if (ret == SMCI_OBJECT_ERROR_INVALID) {
+		pr_info("%s: calling key_manager_prepare\n", __func__);
+		ret = key_manager_prepare(key_mgr_object,
+					  KEY_MGR_HIBERNATE_WITH_ENCRYPTION, key_info);
+	}
 
 	cleanup();
+	kfree(key_info);
+	kfree(key_info_v2);
 	return ret;
 }
 
 int get_key_for_hib(void)
 {
 	size_t key_len_out;
-	struct keymgr_key_info *key_info;
 
 	pr_info("%s: Getting key from SSG\n", __func__);
-	key_info = kmalloc(sizeof(struct keymgr_key_info), GFP_KERNEL);
-	if (!key_info)
-		return -ENOMEM;
-	key_info->key_size = AES256_KEY_SIZE;
 
-	qtee_ret = key_mgr_prepare(KEY_MGR_HIBERNATE_WITH_ENCRYPTION, key_info);
+	qtee_ret = key_mgr_prepare();
 	if (qtee_ret) {
 		if (qtee_ret == INVALID_OPERATION_CHECK) {
 			pr_err("%s: Thrashing the old key.. %d, %d\n", __func__, qtee_ret,
@@ -635,19 +666,18 @@ int get_key_for_hib(void)
 			if (qtee_ret) {
 				pr_err("%s: Failed to init QTEE: key_mgr_get_key: %d\n",
 					__func__, qtee_ret);
-				goto free_key_info;
+				goto exit;
 			}
-			qtee_ret = key_mgr_prepare(KEY_MGR_HIBERNATE_WITH_ENCRYPTION,
-				key_info);
+			qtee_ret = key_mgr_prepare();
 			if (qtee_ret) {
 				pr_err("%s: Failed to init QTEE: key_mgr_prepare: %d\n",
 					 __func__, qtee_ret);
-				goto free_key_info;
+				goto exit;
 			}
 		} else {
 			pr_err("%s: Failed to init QTEE: key_mgr_prepare: %d\n",
 					 __func__, qtee_ret);
-			goto free_key_info;
+			goto exit;
 		}
 	}
 
@@ -656,9 +686,7 @@ int get_key_for_hib(void)
 	if (qtee_ret)
 		pr_err("%s: Failed to get Key: %d\n", __func__, qtee_ret);
 
-free_key_info:
-	kfree(key_info);
-
+exit:
 	return qtee_ret;
 }
 EXPORT_SYMBOL_GPL(get_key_for_hib);
