@@ -1,12 +1,13 @@
 # Theettam Kernel — POCO F6 / Redmi Turbo 3 (peridot, SM8635)
 
-A custom **GKI `android14-6.1.173`** kernel for the Xiaomi **peridot** (POCO F6 / Redmi Turbo 3,
+A custom **GKI `android14-6.1.175`** kernel for the Xiaomi **peridot** (POCO F6 / Redmi Turbo 3,
 Snapdragon 8s Gen 3), tuned for performance and battery, and shipped in **four root flavors** so
 you can pick the exact root + hiding stack you want.
 
-> All four boot on peridot. The SUSFS variants pair the latest **SUSFS v2.2.0** with the current
-> KernelSU-family drivers — including combinations that did not exist upstream and were integrated
-> for this kernel.
+> **6.1.175** — the first LTS bump past 6.1.173 for this device, done as a real 3-way merge of the
+> Android Common Kernel `android14-6.1-lts` branch. All four flavors pair the latest **SUSFS v2.2.0**
+> with current KernelSU-family drivers — including combinations that did not exist upstream and
+> were integrated for this kernel.
 
 ---
 
@@ -37,12 +38,36 @@ SUSFS **v2.2.0** with: `sus_path`, `sus_mount`, `sus_kstat`, `sus_map`, `spoof_u
 `spoof_cmdline/bootconfig`, `open_redirect`, and `hide_ksu_susfs_symbols`. Drive it via your
 manager app's SUSFS settings (or a SUSFS module).
 
-## Kernel tuning (all builds)
+## Version reporting
 
-- **Networking:** BBRv3 congestion control + **fq_codel** default qdisc (low bufferbloat), in-kernel **WireGuard**
-- **Memory:** **MGLRU** (multi-gen LRU, on by default), zram with lz4/zstd, cleancache
-- **Scheduler:** UCLAMP (task + task-group), `HZ=300`
-- **Power:** PM/thermal cleanups, `init_on_free` disabled for lower overhead
+The kernel reports a **stock GKI version string** rather than a custom kernel name, and GMS is
+served a certified-looking release:
+
+| Layer | Effect |
+|---|---|
+| `CONFIG_LOCALVERSION` | reports `6.1.175-android14-11-ga3b9c44908dd-ab13320413` — stock GKI form, no custom branding |
+| `CONFIG_UNAME_OVERRIDE` | `com.google.android.gms` is served `6.1.118-android14-11-ga3b9c44908dd-ab13320413` |
+| SUSFS `spoof_uname` | manager-configurable uname spoofing on top |
+
+---
+
+## What this fork adds
+
+On top of the peridot device base (see Credits):
+
+- **6.1.175** — full ACK `android14-6.1-lts` merge (1010 commits; conflicts resolved toward the device side)
+- **BORE** CPU scheduler — `sysctl kernel.sched_bore=0` disables it at runtime
+- **ADIOS** I/O scheduler (default)
+- **BBRv3** congestion control + **PLB** (protective load balancing)
+- **Stock GKI version string** in place of the base's custom kernel name
+- **`MODULE_SIG=n`** so KernelSU-family modules load
+- The **four root flavors** above, including the SUSFS ports and their CI
+
+## Tuning inherited from the device base
+
+Already present in the base this fork builds on, and preserved here: **MGLRU** (multi-gen LRU),
+**fq_codel** default qdisc, in-kernel **WireGuard**, **UCLAMP** (task + task-group), **`HZ=300`**,
+zram (lz4/zstd), and the `UNAME_OVERRIDE` GMS spoof.
 
 ---
 
@@ -54,6 +79,8 @@ manager app's SUSFS settings (or a SUSFS module).
 4. Install the matching **manager app** (KernelSU-Next / SukiSU / ReSukiSU) and grant root.
 5. For hiding: enable **SUSFS** in the manager (or install a SUSFS module) and add your targets.
 
+AnyKernel3 flashes the `Image` only — your stock `vendor_dlkm` is kept.
+
 **Always keep a backup of your current boot/init_boot and be ready for fastboot recovery.**
 
 ---
@@ -62,14 +89,20 @@ manager app's SUSFS settings (or a SUSFS module).
 
 Built on GPL-2.0 upstreams — thanks to their authors:
 
+- **GuidixX/kernel_xiaomi_sm8635** — the peridot device kernel this fork is built on, and the source
+  of its device support and most of its tuning — <https://github.com/GuidixX/kernel_xiaomi_sm8635>
+- **LineageOS** `android_kernel_qcom_sm8650` — qcom/device bits (retargeted to sm8635)
+- **Android Common Kernel** `android14-6.1-lts` — <https://android.googlesource.com/kernel/common>
+- **BORE** (Burst-Oriented Response Enhancer) and **ADIOS** (Adaptive Deadline I/O Scheduler) by
+  Masahito Suzuki (firelzrd) — <https://github.com/firelzrd/bore-scheduler>
+- **SUSFS (susfs4ksu)** by simonpunk — <https://gitlab.com/simonpunk/susfs4ksu>
 - **KernelSU-Next** — <https://github.com/KernelSU-Next/KernelSU-Next>
 - **SukiSU-Ultra** — <https://github.com/ShirkNeko/SukiSU-Ultra>
 - **ReSukiSU** — <https://github.com/ReSukiSU/ReSukiSU>
-- **SUSFS (susfs4ksu)** by simonpunk — <https://gitlab.com/simonpunk/susfs4ksu>
-- peridot device kernel source (Xiaomi) + Android Common Kernel `android14-6.1`
+- peridot device kernel source (Xiaomi)
 
-The SUSFS integration scripts for the driver-agnostic hand-port (`scripts/susfs/integrate.sh`)
-and the native pairing (`scripts/susfs/integrate-native.sh`) live in this tree, along with the
-per-build CI workflows under `.github/workflows/`.
+The SUSFS integration scripts — the hand-port (`scripts/susfs/integrate.sh`,
+`scripts/susfs/integrate-sukisu.sh`) and the native pairing (`scripts/susfs/integrate-native.sh`) —
+live in this tree, along with the per-build CI workflows under `.github/workflows/`.
 
 *Maintainer: Mohithash (Theettam Kernel). Root/SUSFS builds are provided as-is; flash at your own risk.*
