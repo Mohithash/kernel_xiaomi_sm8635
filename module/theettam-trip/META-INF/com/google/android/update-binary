@@ -1,0 +1,12 @@
+#!/sbin/sh
+#################
+# Initialization
+#################
+umask 022
+OUTFD=$2
+ZIPFILE=$3
+mount /data 2>/dev/null
+[ -f /data/adb/magisk/util_functions.sh ] && . /data/adb/magisk/util_functions.sh
+[ -f /data/adb/ksu/util_functions.sh ] && . /data/adb/ksu/util_functions.sh
+install_module
+exit 0
