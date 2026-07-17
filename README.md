@@ -143,7 +143,17 @@ build loudly instead of quietly building someone else's tree.
 
 ---
 
-## <img src="https://img.shields.io/badge/-05-60a5fa?style=flat-square" height="18"> Credits & upstreams
+## <img src="https://img.shields.io/badge/-05-c084fc?style=flat-square" height="18"> Writeup
+
+**[Upgrading an Android GKI device kernel to a newer LTS →](docs/upgrading-gki-device-kernel-lts.md)**
+
+Why device kernels get stuck on an old LTS, and the method that moves them: merge ACK's
+`android14-6.1-lts` release tag instead of applying mainline incrementals, which break the frozen KMI.
+Written from the 6.1.173 → 6.1.175 bump — 1010 commits, six conflicts, every number reproducible.
+
+---
+
+## <img src="https://img.shields.io/badge/-06-60a5fa?style=flat-square" height="18"> Credits & upstreams
 
 Built on GPL-2.0 upstreams — thanks to their authors:
 
