@@ -167,14 +167,10 @@ Built on GPL-2.0 upstreams — thanks to their authors:
 - peridot device kernel source *(Xiaomi)*
 
 <div align="center">
-<br>
 
 **Maintainer:** Mohithash *(Theettam Kernel)*
 Root/SUSFS builds are provided as-is — flash at your own risk.
 
-<sub>
+<sub><a href="../../releases">Releases</a> · <a href="docs/telegram-post.md">Telegram post</a> · <a href="../../issues">Upstream tracker</a></sub>
 
-[Releases](../../releases) · [Telegram post](docs/telegram-post.md) · [Upstream tracker](../../issues)
-
-</sub>
 </div>
