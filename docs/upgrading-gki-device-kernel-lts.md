@@ -199,9 +199,16 @@ new is a regression you introduced. Ours: **827 symbols, zero missing.**
 appearing in the defconfig at all. Only the resolved config is the truth:
 
 ```bash
-make ARCH=arm64 O=out gki_defconfig
+make ARCH=arm64 O=out LLVM=1 gki_defconfig     # LLVM=1 matters -- see below
 grep -E '^CONFIG_MQ_IOSCHED_KYBER=' out/.config
 ```
+
+**Resolve with the toolchain you build with.** Kconfig probes the compiler, so symbols gated on
+compiler support vanish silently under the wrong one. Resolve this tree with host GCC and
+`CONFIG_CFI_CLANG` and `CONFIG_SHADOW_CALL_STACK` disappear from `.config` even though the defconfig
+sets both `=y` -- they depend on clang. Nothing warns you; the symbols are simply absent, and you
+conclude your kernel has no CFI. Check `CONFIG_CC_VERSION_TEXT` in the `.config` you are reading: if
+it says gcc and you ship with clang, you are reading a different kernel's configuration.
 
 **Boot the bare base first.** Before layering root, SUSFS, a scheduler, anything — boot the merged kernel
 alone. If you stack four changes and it bootloops, you have learned nothing. We booted 175 bare, then
