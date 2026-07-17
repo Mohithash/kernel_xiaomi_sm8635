@@ -44,69 +44,79 @@ Four root flavors. Pick the exact root + hiding stack you want.
 
 ---
 
-## <img src="https://img.shields.io/badge/-02-c084fc?style=flat-square" height="18"> What this fork adds
+## <img src="https://img.shields.io/badge/-02-c084fc?style=flat-square" height="18"> Features
 
-<table>
-<tr><td width="50%" valign="top">
+Everything below is read from the **resolved config**, not the defconfig — a Kconfig `default y`
+symbol ships without appearing in a defconfig, and a defconfig line can be overridden.
 
-**🐧 Kernel**
-- **GKI 6.1.175** — first LTS bump past 6.1.173 for this device
-- Real 3-way merge of ACK `android14-6.1-lts` (1010 commits)
-- **BORE** CPU scheduler · **ADIOS** I/O scheduler *(default)*
+### Added by this fork
 
-</td><td width="50%" valign="top">
+| | Feature | Why it's here |
+|:--|:--|:--|
+| 🐧 | **GKI 6.1.175** | First LTS bump past 6.1.173 for peridot — a real 3-way merge of ACK `android14-6.1-lts` (1010 commits, 6 conflicts). [How ↗](docs/upgrading-gki-device-kernel-lts.md) |
+| ⚡ | **BORE** scheduler | Burst-Oriented Response Enhancer. Touch and scroll are *bursty*; BORE gives short-burst tasks priority, which is the UI. `sysctl kernel.sched_bore=0` to disable live |
+| 💾 | **ADIOS** I/O scheduler *(default)* | Adaptive Deadline. App launch is latency-bound, not throughput-bound |
+| 🌐 | **BBRv3** *(default TCP CC)* | Real v3 (`BBR_VERSION 3`) with the ECN/loss response v1 lacks |
+| 🚦 | **CAKE** *(available)* | For links whose bandwidth you can name — tether, wifi. Not default; see below |
+| 🎭 | **Stock GKI version string** | Reports `6.1.175-android14-11-…` — no custom kernel branding |
+| 🔓 | **`MODULE_SIG=n`** | So KernelSU-family modules load |
+| 🛡 | **4 root flavors + SUSFS v2.2.0** | Including KernelSU-Next v3.3.0 + SUSFS — a pairing that doesn't exist upstream |
 
-**🛡 Root & hiding**
-- **KernelSU-Next v3.3.0 + SUSFS v2.2.0** — a pairing that
-  doesn't exist upstream, integrated here
-- **SukiSU-Ultra + SUSFS** *(+KPM)* · **ReSukiSU + SUSFS**
-- **BBRv3** congestion control *(default)*
+### Inherited from the device base
 
-</td></tr>
-</table>
+Present in [GuidixX/kernel_xiaomi_sm8635](https://github.com/GuidixX/kernel_xiaomi_sm8635) and preserved
+here — **not this fork's work**:
+
+**MGLRU** (multi-gen LRU, on) · **fq_codel** default qdisc · in-kernel **WireGuard** · **UCLAMP**
+(task + task-group) · **`HZ=300`** · **PSI** · **BFQ** · zram (lz4/zstd) · **THP** ·
+`UNAME_OVERRIDE` → serves GMS `6.1.118-…`
 
 <details>
-<summary><b>🔍 Version reporting — three independent layers</b></summary>
+<summary><b>🔍 Everything else the kernel ships (GKI baseline)</b></summary>
 
 <br>
 
-| Layer | Effect |
+| Area | Enabled |
 |:--|:--|
-| `CONFIG_LOCALVERSION` | reports `6.1.175-android14-11-ga3b9c44908dd-ab13320413` — stock GKI form, **no custom kernel branding** |
-| `CONFIG_UNAME_OVERRIDE` | `com.google.android.gms` is served `6.1.118-android14-11-ga3b9c44908dd-ab13320413` |
-| SUSFS `spoof_uname` | manager-configurable spoofing on top |
+| **Security** | `SELINUX` · `CFI_CLANG` (kCFI) · `SHADOW_CALL_STACK` · `RANDOMIZE_BASE` (KASLR) · `STACKPROTECTOR_STRONG` · `HARDENED_USERCOPY` · `INIT_ON_ALLOC_DEFAULT_ON` |
+| **eBPF / tracing** | `BPF_SYSCALL` · `BPF_JIT` · **`DEBUG_INFO_BTF`** · `KPROBES` · `UPROBES` · `FTRACE` |
+| **Filesystems** | `F2FS` (+compression) · `EROFS` (+zip) · `EXFAT` · `FUSE` · `OVERLAY_FS` · `INCREMENTAL_FS` |
+| **I/O** | `ADIOS` (default) · `BFQ` · `KYBER` · `MQ_DEADLINE` · `BLK_CGROUP` |
+| **Memory** | `LRU_GEN` (+enabled) · `ZRAM`/`ZSMALLOC` · `ZSTD`/`LZ4` · `THP` · `CLEANCACHE` · `MEMCG` |
+| **Virt** | `GUNYAH` (+`VCPU`) — Qualcomm's hypervisor · `VIRTIO` · `VHOST_VSOCK` |
+| **USB gadget** | `USB_CONFIGFS` · **`USB_CONFIGFS_F_HID`** — HID gadget works |
 
-`uname -r` showing the real version to your shell is **correct** — the GMS override is targeted by
-caller cmdline, and the SUSFS spoof is inert until your manager sets it.
-
-</details>
-
-<details>
-<summary><b>🔍 SUSFS features (all SUSFS builds)</b></summary>
-
-<br>
-
-`sus_path` · `sus_mount` · `sus_kstat` · `sus_map` · `spoof_uname` · `spoof_cmdline/bootconfig` ·
-`open_redirect` · `hide_ksu_susfs_symbols` · `enable_log`
-
-Drive them from your manager's SUSFS settings, or a SUSFS module.
-
-</details>
-
-<details>
-<summary><b>🔍 Tuning inherited from the device base</b></summary>
-
-<br>
-
-Already present in the base this fork builds on, and preserved here — **not this fork's work**:
-**MGLRU** · **fq_codel** default qdisc · in-kernel **WireGuard** · **UCLAMP** (task + task-group) ·
-**`HZ=300`** · zram (lz4/zstd) · the `UNAME_OVERRIDE` GMS spoof.
+`DEBUG_INFO_BTF` is worth calling out: most custom kernels drop it, and without it modern eBPF
+tooling (bpftrace, CO-RE programs) can't run. Here it does.
 
 </details>
 
 ---
 
-## <img src="https://img.shields.io/badge/-03-4ade80?style=flat-square" height="18"> Flashing
+## <img src="https://img.shields.io/badge/-03-4ade80?style=flat-square" height="18"> Why this combination
+
+Each addition targets a **different** bottleneck, which is why they compose instead of fighting:
+
+| Bottleneck | Answer | Why this one |
+|:--|:--|:--|
+| **UI latency** | BORE + UCLAMP + HZ=300 | Phone workloads are bursts of work between idle. BORE scores burst behaviour rather than assuming steady CPU hogs; UCLAMP lets userspace boost UI threads; HZ=300 trades a little overhead for finer preemption |
+| **App launch** | ADIOS | Launching is many small dependent reads. Deadline-based beats throughput-based |
+| **Memory pressure** | MGLRU | Better reclaim decisions → fewer background apps killed on 8/12 GB |
+| **Radio networking** | BBRv3 + fq_codel | On a radio, packet loss is usually interference, not congestion — the exact assumption CUBIC gets wrong. BBR models bandwidth and RTT instead. fq_codel adds flow isolation with no tuning |
+
+**What isn't here matters as much:**
+
+- **CAKE isn't default.** Its advantage is *shaping* — you tell it the link bandwidth. A phone's radio bandwidth changes every few seconds and you can't name it. Unshaped, CAKE ≈ fq_codel. So it's built for people on a known link, and off for everyone else.
+- **PLB isn't advertised.** The code ships and is correct, but PLB repaths flows across datacenter ECMP by rewriting the IPv6 flow label. A phone has one path.
+- **KSM isn't enabled.** RAM dedup costs constant CPU scanning for little gain on a phone.
+- **`USER_NS` stays out of the shipping flavors.** Containers need it; it's also a well-worn privilege-escalation surface. It lives only in the experimental DroidSpaces build.
+- **The toolchain is stock AOSP clang.** Neutron's LTO/PGO/BOLT make *the compiler* faster, not the kernel it emits — and a rolling toolchain can't be pinned.
+
+The pattern is the same throughout: **add what addresses a real bottleneck, leave out what only sounds good.**
+
+---
+
+## <img src="https://img.shields.io/badge/-04-4ade80?style=flat-square" height="18"> Flashing
 
 ```bash
 1.  Download the ZIP for your flavor from Releases
@@ -120,7 +130,7 @@ AnyKernel3 flashes the **`Image` only** — your stock `vendor_dlkm` is kept.
 
 ---
 
-## <img src="https://img.shields.io/badge/-04-f87171?style=flat-square" height="18"> Root or modules not mounting?
+## <img src="https://img.shields.io/badge/-05-f87171?style=flat-square" height="18"> Root or modules not mounting?
 
 **Most common cause: more than one KernelSU-family manager installed.** Each flavor pairs with exactly
 one manager, and the kernel crowns a single manager app at boot. With KernelSU-Next, SukiSU and ReSukiSU
@@ -148,7 +158,7 @@ enough to tell a crowning problem from a real bug.
 
 ---
 
-## <img src="https://img.shields.io/badge/-05-fbbf24?style=flat-square" height="18"> Building
+## <img src="https://img.shields.io/badge/-06-fbbf24?style=flat-square" height="18"> Building
 
 The kernel source and its CI live on the **[`peridot-6.1.175`](../../tree/peridot-6.1.175)** branch —
 `main` carries the docs.
@@ -171,7 +181,7 @@ build loudly instead of quietly building someone else's tree.
 
 ---
 
-## <img src="https://img.shields.io/badge/-06-c084fc?style=flat-square" height="18"> Writeup
+## <img src="https://img.shields.io/badge/-07-c084fc?style=flat-square" height="18"> Writeup
 
 **[Upgrading an Android GKI device kernel to a newer LTS →](docs/upgrading-gki-device-kernel-lts.md)**
 
@@ -181,7 +191,7 @@ Written from the 6.1.173 → 6.1.175 bump — 1010 commits, six conflicts, every
 
 ---
 
-## <img src="https://img.shields.io/badge/-07-60a5fa?style=flat-square" height="18"> Credits & upstreams
+## <img src="https://img.shields.io/badge/-08-60a5fa?style=flat-square" height="18"> Credits & upstreams
 
 Built on GPL-2.0 upstreams — thanks to their authors:
 
