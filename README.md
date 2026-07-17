@@ -1,108 +1,165 @@
-# Theettam Kernel — POCO F6 / Redmi Turbo 3 (peridot, SM8635)
+<div align="center">
 
-A custom **GKI `android14-6.1.175`** kernel for the Xiaomi **peridot** (POCO F6 / Redmi Turbo 3,
-Snapdragon 8s Gen 3), tuned for performance and battery, and shipped in **four root flavors** so
-you can pick the exact root + hiding stack you want.
+<img src="docs/banner.svg" alt="Theettam Kernel — peridot — GKI 6.1.175" width="100%">
 
-> **6.1.175** — the first LTS bump past 6.1.173 for this device, done as a real 3-way merge of the
-> Android Common Kernel `android14-6.1-lts` branch. All four flavors pair the latest **SUSFS v2.2.0**
-> with current KernelSU-family drivers — including combinations that did not exist upstream and
-> were integrated for this kernel.
+<br>
+
+[![Release](https://img.shields.io/github/v/release/Mohithash/kernel_xiaomi_sm8635?style=for-the-badge&label=RELEASE&labelColor=0b1020&color=4f8cff)](../../releases/latest)
+[![Kernel](https://img.shields.io/badge/GKI-6.1.175-4ade80?style=for-the-badge&labelColor=0b1020)](https://android.googlesource.com/kernel/common/+/refs/tags/android14-6.1.175_r00)
+[![SUSFS](https://img.shields.io/badge/SUSFS-v2.2.0-c084fc?style=for-the-badge&labelColor=0b1020)](https://gitlab.com/simonpunk/susfs4ksu)
+[![Downloads](https://img.shields.io/github/downloads/Mohithash/kernel_xiaomi_sm8635/total?style=for-the-badge&label=DOWNLOADS&labelColor=0b1020&color=fbbf24)](../../releases)
+[![License](https://img.shields.io/badge/license-GPL--2.0-60a5fa?style=for-the-badge&labelColor=0b1020)](COPYING)
+
+**A custom GKI kernel for the Xiaomi `peridot` — POCO F6 / Redmi Turbo 3 (Snapdragon 8s Gen 3)**
+
+Four root flavors. Pick the exact root + hiding stack you want.
+
+</div>
 
 ---
 
-## Choose your build
+## <img src="https://img.shields.io/badge/-01-4f8cff?style=flat-square" height="18"> Choose your build
 
-| Build | Root engine | SUSFS | KPM | Manager app | Best for |
-|---|---|:---:|:---:|---|---|
+<div align="center">
+
+| Build | Root engine | SUSFS | KPM | Manager | Best for |
+|:--|:--|:-:|:-:|:--|:--|
 | **KSUN** | KernelSU-Next v3.3.0 | — | — | KernelSU-Next | Lightweight root, no kernel-side hiding |
-| **KSUN + SUSFS** | KernelSU-Next v3.3.0 | ✅ v2.2.0 | — | KernelSU-Next | Root **+ full hiding** |
-| **SukiSU-Ultra + SUSFS** | SukiSU-Ultra | ✅ v2.2.0 | ✅ | SukiSU | Root + hiding **+ Kernel Patch Modules** |
-| **ReSukiSU + SUSFS** | ReSukiSU | ✅ v2.2.0 *(native)* | — | ReSukiSU | Root + hiding, **cleanest integration** |
+| **KSUN + SUSFS** ⭐ | KernelSU-Next v3.3.0 | `v2.2.0` | — | KernelSU-Next | Root **+ full hiding** — start here |
+| **SukiSU-Ultra + SUSFS** | SukiSU-Ultra | `v2.2.0` | ✅ | SukiSU | Root + hiding **+ Kernel Patch Modules** |
+| **ReSukiSU + SUSFS** | ReSukiSU | `v2.2.0` *(native)* | — | ReSukiSU | Root + hiding, **cleanest integration** |
 
-**Quick guidance**
-- **Just want root, minimal footprint?** → **KSUN**
-- **Root + hide from detection (banking, integrity, etc.)?** → any SUSFS build
-- **Want runtime Kernel Patch Modules (`.kpm`)?** → **SukiSU-Ultra + SUSFS**
-- **Want the most robust SUSFS (driver ships it natively, no hand-port)?** → **ReSukiSU + SUSFS**
+### **[⬇  Download latest](../../releases/latest)**
 
-> The KSUN and SukiSU SUSFS builds integrate SUSFS via a hand-authored port (their drivers don't
-> ship kernel-side SUSFS). ReSukiSU implements SUSFS natively, so its pairing is the cleanest.
-> Flash any build with a **full backup and fastboot recovery ready**.
+</div>
+
+> [!NOTE]
+> KSUN and SukiSU don't ship kernel-side SUSFS — those builds use a **hand-authored port** written for this
+> kernel. ReSukiSU implements SUSFS natively, so its pairing is the cleanest. All four boot on peridot.
+
+> [!WARNING]
+> Flash with a **full backup and fastboot recovery ready**. Back up `boot.img` and `vendor_boot.img` first.
 
 ---
 
-## SUSFS features (all SUSFS builds)
+## <img src="https://img.shields.io/badge/-02-c084fc?style=flat-square" height="18"> What this fork adds
 
-SUSFS **v2.2.0** with: `sus_path`, `sus_mount`, `sus_kstat`, `sus_map`, `spoof_uname`,
-`spoof_cmdline/bootconfig`, `open_redirect`, and `hide_ksu_susfs_symbols`. Drive it via your
-manager app's SUSFS settings (or a SUSFS module).
+<table>
+<tr><td width="50%" valign="top">
 
-## Version reporting
+**🐧 Kernel**
+- **GKI 6.1.175** — first LTS bump past 6.1.173 for this device
+- Real 3-way merge of ACK `android14-6.1-lts` (1010 commits)
+- **BORE** CPU scheduler · **ADIOS** I/O scheduler *(default)*
 
-The kernel reports a **stock GKI version string** rather than a custom kernel name, and GMS is
-served a certified-looking release:
+</td><td width="50%" valign="top">
+
+**🛡 Root & hiding**
+- **KernelSU-Next v3.3.0 + SUSFS v2.2.0** — a pairing that
+  doesn't exist upstream, integrated here
+- **SukiSU-Ultra + SUSFS** *(+KPM)* · **ReSukiSU + SUSFS**
+- **BBRv3 + PLB** congestion control
+
+</td></tr>
+</table>
+
+<details>
+<summary><b>🔍 Version reporting — three independent layers</b></summary>
+
+<br>
 
 | Layer | Effect |
-|---|---|
-| `CONFIG_LOCALVERSION` | reports `6.1.175-android14-11-ga3b9c44908dd-ab13320413` — stock GKI form, no custom branding |
+|:--|:--|
+| `CONFIG_LOCALVERSION` | reports `6.1.175-android14-11-ga3b9c44908dd-ab13320413` — stock GKI form, **no custom kernel branding** |
 | `CONFIG_UNAME_OVERRIDE` | `com.google.android.gms` is served `6.1.118-android14-11-ga3b9c44908dd-ab13320413` |
-| SUSFS `spoof_uname` | manager-configurable uname spoofing on top |
+| SUSFS `spoof_uname` | manager-configurable spoofing on top |
+
+`uname -r` showing the real version to your shell is **correct** — the GMS override is targeted by
+caller cmdline, and the SUSFS spoof is inert until your manager sets it.
+
+</details>
+
+<details>
+<summary><b>🔍 SUSFS features (all SUSFS builds)</b></summary>
+
+<br>
+
+`sus_path` · `sus_mount` · `sus_kstat` · `sus_map` · `spoof_uname` · `spoof_cmdline/bootconfig` ·
+`open_redirect` · `hide_ksu_susfs_symbols` · `enable_log`
+
+Drive them from your manager's SUSFS settings, or a SUSFS module.
+
+</details>
+
+<details>
+<summary><b>🔍 Tuning inherited from the device base</b></summary>
+
+<br>
+
+Already present in the base this fork builds on, and preserved here — **not this fork's work**:
+**MGLRU** · **fq_codel** default qdisc · in-kernel **WireGuard** · **UCLAMP** (task + task-group) ·
+**`HZ=300`** · zram (lz4/zstd) · the `UNAME_OVERRIDE` GMS spoof.
+
+</details>
 
 ---
 
-## What this fork adds
+## <img src="https://img.shields.io/badge/-03-4ade80?style=flat-square" height="18"> Flashing
 
-On top of the peridot device base (see Credits):
+```bash
+1.  Download the ZIP for your flavor from Releases
+2.  Boot to custom recovery, or use the AnyKernel3 flash flow
+3.  Flash the ZIP  →  reboot
+4.  Install the matching manager app  →  grant root
+5.  For hiding: enable SUSFS in the manager, add your targets
+```
 
-- **6.1.175** — full ACK `android14-6.1-lts` merge (1010 commits; conflicts resolved toward the device side)
-- **BORE** CPU scheduler — `sysctl kernel.sched_bore=0` disables it at runtime
-- **ADIOS** I/O scheduler (default)
-- **BBRv3** congestion control + **PLB** (protective load balancing)
-- **Stock GKI version string** in place of the base's custom kernel name
-- **`MODULE_SIG=n`** so KernelSU-family modules load
-- The **four root flavors** above, including the SUSFS ports and their CI
-
-## Tuning inherited from the device base
-
-Already present in the base this fork builds on, and preserved here: **MGLRU** (multi-gen LRU),
-**fq_codel** default qdisc, in-kernel **WireGuard**, **UCLAMP** (task + task-group), **`HZ=300`**,
-zram (lz4/zstd), and the `UNAME_OVERRIDE` GMS spoof.
+AnyKernel3 flashes the **`Image` only** — your stock `vendor_dlkm` is kept.
 
 ---
 
-## Flashing
+## <img src="https://img.shields.io/badge/-04-fbbf24?style=flat-square" height="18"> Building
 
-1. Download the ZIP for your chosen build from [Releases](../../releases).
-2. Boot to a custom recovery (or use the AnyKernel3 flash flow) — the ZIP is **AnyKernel3** based.
-3. Flash the ZIP, reboot.
-4. Install the matching **manager app** (KernelSU-Next / SukiSU / ReSukiSU) and grant root.
-5. For hiding: enable **SUSFS** in the manager (or install a SUSFS module) and add your targets.
+```bash
+# The four flavors build from one matrix workflow:
+.github/workflows/build-theettam-20.yml
 
-AnyKernel3 flashes the `Image` only — your stock `vendor_dlkm` is kept.
+# SUSFS integration (hand-port + native pairing):
+scripts/susfs/integrate.sh          # KernelSU-Next
+scripts/susfs/integrate-sukisu.sh   # SukiSU-Ultra
+scripts/susfs/integrate-native.sh   # ReSukiSU (fs-side only)
 
-**Always keep a backup of your current boot/init_boot and be ready for fastboot recovery.**
+# Pinned upstreams, checked automatically on the 5th and 20th:
+upstreams.json  ·  scripts/ci/check-upstreams.py
+```
+
+Every upstream is pinned to an exact commit — a moved or reclaimed repo fails the
+build loudly instead of quietly building someone else's tree.
 
 ---
 
-## Credits & upstreams
+## <img src="https://img.shields.io/badge/-05-60a5fa?style=flat-square" height="18"> Credits & upstreams
 
 Built on GPL-2.0 upstreams — thanks to their authors:
 
-- **GuidixX/kernel_xiaomi_sm8635** — the peridot device kernel this fork is built on, and the source
-  of its device support and most of its tuning — <https://github.com/GuidixX/kernel_xiaomi_sm8635>
-- **LineageOS** `android_kernel_qcom_sm8650` — qcom/device bits (retargeted to sm8635)
-- **Android Common Kernel** `android14-6.1-lts` — <https://android.googlesource.com/kernel/common>
-- **BORE** (Burst-Oriented Response Enhancer) and **ADIOS** (Adaptive Deadline I/O Scheduler) by
-  Masahito Suzuki (firelzrd) — <https://github.com/firelzrd/bore-scheduler>
-- **SUSFS (susfs4ksu)** by simonpunk — <https://gitlab.com/simonpunk/susfs4ksu>
-- **KernelSU-Next** — <https://github.com/KernelSU-Next/KernelSU-Next>
-- **SukiSU-Ultra** — <https://github.com/ShirkNeko/SukiSU-Ultra>
-- **ReSukiSU** — <https://github.com/ReSukiSU/ReSukiSU>
-- peridot device kernel source (Xiaomi)
+- **[GuidixX/kernel_xiaomi_sm8635](https://github.com/GuidixX/kernel_xiaomi_sm8635)** — the peridot device
+  kernel this fork is built on, and the source of its device support and most of its tuning
+- **[LineageOS](https://github.com/LineageOS)** `android_kernel_qcom_sm8650` — qcom/device bits *(retargeted to sm8635)*
+- **[Android Common Kernel](https://android.googlesource.com/kernel/common)** `android14-6.1-lts`
+- **[BORE](https://github.com/firelzrd/bore-scheduler)** and **ADIOS** by Masahito Suzuki *(firelzrd)*
+- **[SUSFS (susfs4ksu)](https://gitlab.com/simonpunk/susfs4ksu)** by simonpunk
+- **[KernelSU-Next](https://github.com/KernelSU-Next/KernelSU-Next)** · **[SukiSU-Ultra](https://github.com/SukiSU-Ultra/SukiSU-Ultra)** · **[ReSukiSU](https://github.com/ReSukiSU/ReSukiSU)**
+- peridot device kernel source *(Xiaomi)*
 
-The SUSFS integration scripts — the hand-port (`scripts/susfs/integrate.sh`,
-`scripts/susfs/integrate-sukisu.sh`) and the native pairing (`scripts/susfs/integrate-native.sh`) —
-live in this tree, along with the per-build CI workflows under `.github/workflows/`.
+<div align="center">
+<br>
 
-*Maintainer: Mohithash (Theettam Kernel). Root/SUSFS builds are provided as-is; flash at your own risk.*
+**Maintainer:** Mohithash *(Theettam Kernel)*
+Root/SUSFS builds are provided as-is — flash at your own risk.
+
+<sub>
+
+[Releases](../../releases) · [Telegram post](docs/telegram-post.md) · [Upstream tracker](../../issues)
+
+</sub>
+</div>
