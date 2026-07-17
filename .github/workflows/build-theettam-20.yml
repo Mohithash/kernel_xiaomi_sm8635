@@ -49,6 +49,7 @@ jobs:
             clone_args: --depth=1 --branch v3.3.0
             pin: ''
             susfs: shim
+            script: integrate.sh
             kpm: 'false'
             zipname: KSUN3.3.0-SUSFS2.2.0
           - id: sukisu-susfs
@@ -57,6 +58,7 @@ jobs:
             clone_args: -b susfs_new
             pin: 278d822a4ebd214bcfd774b7910cb11cdc560bb9
             susfs: shim
+            script: integrate-sukisu.sh
             kpm: 'true'
             zipname: SukiSU-Ultra-SUSFS2.2.0-KPM
           - id: resukisu-susfs
@@ -134,7 +136,10 @@ jobs:
         if: matrix.susfs == 'shim'
         run: |
           set -euo pipefail
-          bash scripts/susfs/integrate.sh "$PWD/KernelSU" "$PWD/susfs4ksu" "$PWD"
+          # Each flavor uses the exact script its BOOTING 1.9-vali build used:
+          #   KSUN   -> integrate.sh        (anchors reply=arg4 / utsname.h)
+          #   SukiSU -> integrate-sukisu.sh (anchors magic2=PT_REGS_PARM2 / version.h)
+          bash "scripts/susfs/${{ matrix.script }}" "$PWD/KernelSU" "$PWD/susfs4ksu" "$PWD"
           if find . -name '*.rej' | grep -q .; then echo "::error::rejects present"; find . -name '*.rej' -exec cat {} +; exit 1; fi
 
       - name: Integrate SUSFS v2.2.0 — fs-side only (native driver)
