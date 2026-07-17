@@ -120,7 +120,35 @@ AnyKernel3 flashes the **`Image` only** — your stock `vendor_dlkm` is kept.
 
 ---
 
-## <img src="https://img.shields.io/badge/-04-fbbf24?style=flat-square" height="18"> Building
+## <img src="https://img.shields.io/badge/-04-f87171?style=flat-square" height="18"> Root or modules not mounting?
+
+**Most common cause: more than one KernelSU-family manager installed.** Each flavor pairs with exactly
+one manager, and the kernel crowns a single manager app at boot. With KernelSU-Next, SukiSU and ReSukiSU
+managers all installed, the wrong one can end up crowned — root looks half-working and modules stop
+mounting.
+
+**Try in this order:**
+
+1. **Uninstall every manager except the one for your flavor.**
+
+   | Your zip | Install only this manager |
+   |:--|:--|
+   | `KSUN3.3.0` · `KSUN3.3.0-SUSFS2.2.0` | **KernelSU-Next** |
+   | `SukiSU-Ultra-SUSFS2.2.0-KPM` | **SukiSU** |
+   | `ReSukiSU-SUSFS2.2.0` | **ReSukiSU** |
+
+2. **Reboot.** The manager is crowned during boot, so uninstalling one only takes effect after a restart.
+3. **Reflash your flavor's zip** — [2.0.1](../../releases/tag/v2.0.1) or [2.0](../../releases/tag/v2.0) —
+   then reboot. Flashing does not touch `/data`, so your modules and allowlist survive.
+4. **Check the manager matches the kernel.** A manager much older or newer than the kernel's driver can
+   fail to talk to it. Use the manager build that pairs with your flavor's driver version.
+
+Still stuck? Note your flavor, manager app + version, and whether modules mount at all — that trio is
+enough to tell a crowning problem from a real bug.
+
+---
+
+## <img src="https://img.shields.io/badge/-05-fbbf24?style=flat-square" height="18"> Building
 
 The kernel source and its CI live on the **[`peridot-6.1.175`](../../tree/peridot-6.1.175)** branch —
 `main` carries the docs.
@@ -143,7 +171,7 @@ build loudly instead of quietly building someone else's tree.
 
 ---
 
-## <img src="https://img.shields.io/badge/-05-c084fc?style=flat-square" height="18"> Writeup
+## <img src="https://img.shields.io/badge/-06-c084fc?style=flat-square" height="18"> Writeup
 
 **[Upgrading an Android GKI device kernel to a newer LTS →](docs/upgrading-gki-device-kernel-lts.md)**
 
@@ -153,7 +181,7 @@ Written from the 6.1.173 → 6.1.175 bump — 1010 commits, six conflicts, every
 
 ---
 
-## <img src="https://img.shields.io/badge/-06-60a5fa?style=flat-square" height="18"> Credits & upstreams
+## <img src="https://img.shields.io/badge/-07-60a5fa?style=flat-square" height="18"> Credits & upstreams
 
 Built on GPL-2.0 upstreams — thanks to their authors:
 
