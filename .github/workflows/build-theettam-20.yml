@@ -188,6 +188,10 @@ jobs:
           fi
           if [ "${{ matrix.droidspaces }}" = "true" ]; then
             for o in $(grep -v '^#' scripts/droidspaces/droidspaces.config); do
+              # A name that is not a real Kconfig symbol enables nothing and says nothing;
+              # scripts/config happily writes CONFIG_MADE_UP=y and olddefconfig drops it.
+              grep -rqE "^\s*(menu)?config $o\s*$" --include=Kconfig . \
+                || { echo "::error::CONFIG_$o is not a Kconfig symbol in this tree"; exit 1; }
               $C --file out/.config -e "$o"; done
           fi
           make -j"$(nproc --all)" O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 olddefconfig
@@ -204,7 +208,9 @@ jobs:
           if [ "${{ matrix.droidspaces }}" = "true" ]; then
             miss=0
             for o in $(grep -v '^#' scripts/droidspaces/droidspaces.config); do
-              grep -qE "^CONFIG_$o=y" out/.config || { echo "::error::CONFIG_$o did not enable"; miss=1; }
+              # Accept =m as well as =y: a tristate whose dependency is modular is
+              # correctly demoted by kconfig, and that is still enabled.
+              grep -qE "^CONFIG_$o=(y|m)" out/.config || { echo "::error::CONFIG_$o did not enable"; miss=1; }
             done
             [ "$miss" = "0" ] || exit 1
             echo "✅ all 11 DroidSpaces options enabled"
