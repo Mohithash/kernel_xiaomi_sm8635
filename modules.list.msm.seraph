@@ -19,6 +19,7 @@ sdhci-msm.ko
 gdsc-regulator.ko
 cmd-db.ko
 qcom_rpmh.ko
+crm-v2.ko
 icc-bcm-voter.ko
 icc-rpmh.ko
 qcom-pmu-lib.ko

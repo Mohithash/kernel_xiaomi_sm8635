@@ -222,6 +222,7 @@ struct dwxgmac_addrs {
 	u32 pps_offset;
 };
 
+/* Addresses that may be customized by a platform */
 struct dwmac4_addrs {
 	u32 dma_chan;
 	u32 dma_chan_offset;

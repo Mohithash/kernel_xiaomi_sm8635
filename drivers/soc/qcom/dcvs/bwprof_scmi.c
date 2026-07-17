@@ -426,8 +426,7 @@ CONFIGFS_ATTR(bwprof_, enable_config);
 
 static ssize_t monitor_data_show(char *page, int master_idx, u32 hw_type)
 {
-	struct bwprof_hw_group  *hw_node = bwprof_data->hw_node[hw_type];
-	u32 bus_width = hw_node->bus_width;
+	u32 bus_width = bwprof_data->hw_node[hw_type]->bus_width;
 	int cnt = 0;
 	int i;
 	int num_samples_to_read = (MAX_NUM_SAMPLES / bwprof_data->sample_ms);
@@ -438,6 +437,8 @@ static ssize_t monitor_data_show(char *page, int master_idx, u32 hw_type)
 
 	spin_lock_irqsave(&bwprof_data->rx_lock, flags);
 	for (i = 0; i < num_samples_to_read; i++) {
+		if (hw_type == BWPROF_LLCC)
+			monitor_data[i].mem_freq = LLCC_FREQ_ZERO;
 		cnt += scnprintf(page + cnt, PAGE_SIZE - cnt, "%llu\t%u\t%u\t%u\n",
 				monitor_data[i].ts,
 				monitor_data[i].meas_mbps[master_idx],
@@ -634,6 +635,27 @@ static ssize_t bwprof_vpu_ls_show(struct config_item *item, char *page)
 
 CONFIGFS_ATTR_RO(bwprof_, vpu_ls);
 
+static ssize_t bwprof_pcie_ls_show(struct config_item *item, char *page)
+{
+	u8 master;
+	struct bwprof_hw_group *grp = container_of(to_config_group(item),
+			struct bwprof_hw_group, ls_group);
+
+	if (!grp)
+		return -EINVAL;
+
+	if (grp->hw_type == BWPROF_DDR)
+		master = DDR_PCIe;
+	else if (grp->hw_type == BWPROF_LLCC)
+		master = LLCC_PCIe;
+	else
+		return -EINVAL;
+
+	return bwprof_ls_show_common(page, master);
+}
+
+CONFIGFS_ATTR_RO(bwprof_, pcie_ls);
+
 static struct configfs_attribute *bwprof_attrs[] = {
 	&bwprof_attr_available_config,
 	&bwprof_attr_set_config,
@@ -649,6 +671,7 @@ static struct configfs_attribute *bwprof_ls_attrs[] = {
 	&bwprof_attr_dpu_ls,
 	&bwprof_attr_eva_ls,
 	&bwprof_attr_vpu_ls,
+	&bwprof_attr_pcie_ls,
 	NULL,
 };
 
@@ -674,7 +697,7 @@ static void trace_event(void)
 			bus_width = bwprof_data->hw_node[BWPROF_DDR]->bus_width;
 	} else {
 		if (bwprof_data->hw_node[BWPROF_LLCC])
-			bus_width = bwprof_data->hw_node[BWPROF_LLCC]->bus_width;
+			monitor_data[0].mem_freq = LLCC_FREQ_ZERO;
 	}
 
 	if (!bwprof_data->is_hist_enable) {

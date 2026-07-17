@@ -544,33 +544,33 @@ EXPORT_SYMBOL(clk_debug_measure_register);
  * @mux: debug mux that requires a regmap
  *
  * This function attempts to look up and map a regmap for a debug mux
- * using syscon_regmap_lookup_by_phandle if the base name property exists
- * and assigns an appropriate regmap.
+ * using device_node_to_regmap if the base name property exists and
+ * assigns an appropriate regmap.
  *
  * Returns 0 on success, -EBADR when it can't find base name, -EERROR otherwise.
  */
 int map_debug_bases(struct platform_device *pdev, const char *base,
 		    struct clk_debug_mux *mux)
 {
+	struct device_node *syscon_np;
+	int ret = 0;
+
 	if (!of_get_property(pdev->dev.of_node, base, NULL))
 		return -EBADR;
 
-	mux->regmap = syscon_regmap_lookup_by_phandle(pdev->dev.of_node,
-						     base);
+	syscon_np = of_parse_phandle(pdev->dev.of_node, base, 0);
+	if (!syscon_np)
+		return -ENODEV;
+
+	mux->regmap = device_node_to_regmap(syscon_np);
 	if (IS_ERR(mux->regmap)) {
 		pr_err("Failed to map %s (ret=%ld)\n", base,
 				PTR_ERR(mux->regmap));
-		return PTR_ERR(mux->regmap);
+		ret = PTR_ERR(mux->regmap);
 	}
 
-	/*
-	 * syscon_regmap_lookup_by_phandle prepares the 0th clk handle provided
-	 * in the device node. The debug clock controller prepares/enables/
-	 * disables the required clock, thus detach the clock.
-	 */
-	regmap_mmio_detach_clk(mux->regmap);
-
-	return 0;
+	of_node_put(syscon_np);
+	return ret;
 }
 EXPORT_SYMBOL(map_debug_bases);
 
