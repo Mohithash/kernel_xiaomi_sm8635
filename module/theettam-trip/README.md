@@ -1,7 +1,46 @@
 # Theettam Trip Mode
 
-Blocks the modem **data-path** wakelocks while the screen is off. Calls, SMS and
-alarms keep working.
+**Calls and SMS only.** Everything else off. For trips, or any day the battery has
+to last longer than the phone does.
+
+```sh
+trip.sh on       # radios and background off
+trip.sh off      # exactly as it was
+trip.sh status
+```
+
+Two modes, independent:
+
+| | |
+|---|---|
+| **`trip.sh on`** | data, wifi, BT, sync, location off. Kernel wakelock blocker armed. Calls and SMS still arrive. |
+| **service.sh** *(automatic)* | just arms the kernel blocker on screen-off, clears it on screen-on. Everything keeps working; the phone only sleeps harder. |
+
+Use the daemon daily; flip trip mode on when you need two days out of one charge.
+
+## How this compares to Frosty
+
+[Frosty](https://github.com/Drsexo/Frosty) is the most advanced module in this space
+and is 3,640 lines across 19 scripts. This is ~110. The difference is not cleverness,
+it is that two of its hardest problems do not exist here:
+
+**Its `gms_freeze.sh` does not apply to you.** It runs `pm disable` on individual
+Google Play services components -- surgery on *privileged* GMS, which is why its
+README warns about breaking Maps, Find My Device, Pay and NFC. Under sandboxed Play
+(GrapheneOS-style, as on VoltageOS) GMS is an ordinary user app with no privileged
+services to dissect. Turn data off and it stops, like any other app. That entire
+file and its breakage evaporate.
+
+**Its wakelock killer cannot see the wakelocks that matter.** It greps `dumpsys
+power`, which lists only userspace wakelocks, then `am force-stop`s whoever holds
+one. The wakelocks that keep a Snapdragon awake are held by *drivers* -- `IPA_WS`,
+`rmnet_ipa%d`, `RMNET_SHS` -- invisible to `dumpsys` and unreachable from userspace
+at any privilege. Your kernel refuses them in `wakeup_source_activate()`. That is
+the half no module can do, and it is why this one checks for the kernel and aborts
+without it.
+
+One more thing worth knowing: Frosty never checks whether you are on a call before
+pulling radios. `trip.sh` does.
 
 ## Why this is not another battery module
 
