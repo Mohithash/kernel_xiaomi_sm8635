@@ -60,7 +60,7 @@ Four root flavors. Pick the exact root + hiding stack you want.
 - **KernelSU-Next v3.3.0 + SUSFS v2.2.0** — a pairing that
   doesn't exist upstream, integrated here
 - **SukiSU-Ultra + SUSFS** *(+KPM)* · **ReSukiSU + SUSFS**
-- **BBRv3 + PLB** congestion control
+- **BBRv3** congestion control *(default)*
 
 </td></tr>
 </table>
