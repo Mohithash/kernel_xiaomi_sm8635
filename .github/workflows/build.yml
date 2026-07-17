@@ -7,11 +7,10 @@ on:
         description: "KernelSU-Next tag/commit (blank = latest release tag)"
         required: false
         default: ""
-  push:
-    branches: [ main ]
-    paths-ignore:
-      - '**/*.md'
-      - '.github/**'
+  # No push trigger. This is the legacy single-flavor build, superseded by
+  # build-theettam-20.yml on peridot-6.1.175. Its paths-ignore covered '**/*.md' and
+  # '.github/**' but nothing else, so a docs commit touching docs/banner.svg built a
+  # kernel and published it as a full (non-pre) release. Manual only now.
 
 concurrency:
   group: build-${{ github.ref }}
