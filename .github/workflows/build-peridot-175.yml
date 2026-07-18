@@ -1,0 +1,94 @@
+name: peridot 6.1.175 (ACK-lts merge) — compile test
+
+# GuidixX 16.2 (peridot device source, 6.1.173) with a proper 3-way merge of ACK's
+# android14-6.1.175_r00 release tag. This validates the merge compiles before any
+# root/SUSFS/BORE/ADIOS work is layered on top.
+
+on:
+  workflow_dispatch:   # base compile test — base already boots; run on demand only
+
+concurrency:
+  group: peridot175-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  KBUILD_BUILD_USER: build
+  KBUILD_BUILD_HOST: localhost
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: peridot-6.1.175
+          fetch-depth: 1
+
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends bc bison flex build-essential \
+            libssl-dev libncurses-dev libelf-dev zlib1g-dev pkg-config git curl zip cpio \
+            kmod python3 ccache lld llvm dwarves
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ccache-peridot175-${{ github.sha }}
+          restore-keys: ccache-peridot175-
+      - id: clang
+        uses: actions/cache@v4
+        with:
+          path: ~/clang
+          key: clang-kei-r547379
+      - if: steps.clang.outputs.cache-hit != 'true'
+        run: rm -rf "$HOME/clang"; git clone --depth=1 https://gitlab.com/kei-space/clang/r547379 "$HOME/clang"
+      - run: echo "$HOME/clang/bin" >> "$GITHUB_PATH"
+
+      - name: Configure + build
+        run: |
+          set -euo pipefail
+          export ARCH=arm64 SUBARCH=arm64 PATH="$HOME/clang/bin:$PATH"
+          echo "=== version (must be 175) ==="
+          grep -E '^(VERSION|PATCHLEVEL|SUBLEVEL) ' Makefile
+          grep -q '^SUBLEVEL = 175' Makefile || { echo "::error::not 175"; exit 1; }
+          make -j"$(nproc --all)" O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 gki_defconfig
+          make -j"$(nproc --all)" O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 olddefconfig
+          export KBUILD_COMPILER_STRING="$(clang --version | head -n1)"
+          make -j"$(nproc --all)" O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CC="ccache clang" 2>&1 | tee build.log
+
+      - name: Verify Image
+        run: |
+          set -euo pipefail
+          IMG=out/arch/arm64/boot/Image
+          [ -f "$IMG" ] || { echo "::error::no Image produced"; exit 1; }
+          echo "✅ Image built: $(stat -c%s "$IMG") bytes"
+          echo "kernel.release: $(cat out/include/config/kernel.release)"
+
+      - name: Package flashable zip (AnyKernel3)
+        run: |
+          set -euo pipefail
+          if [ -d anykernel ]; then
+            rm -rf AK3; cp -r anykernel AK3; cp out/arch/arm64/boot/Image AK3/Image
+            VER="$(cat out/include/config/kernel.release 2>/dev/null || echo 6.1.175)"
+            ZIP="Theettam-peridot-6.1.175-ACKmerge-$(date +%Y%m%d-%H%M).zip"
+            ( cd AK3 && zip -r9 "../$ZIP" . -x '.git*' )
+            echo "ZIP=$ZIP" >> "$GITHUB_ENV"
+          else
+            echo "no anykernel dir; skipping packaging"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: peridot-175-zip
+          path: "*.zip"
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: peridot-175-build-log
+          path: build.log
+          if-no-files-found: ignore

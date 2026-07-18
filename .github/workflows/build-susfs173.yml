@@ -1,0 +1,145 @@
+name: KernelSU-Next + SUSFS v2.2.0 on 6.1.173
+
+# weishu KernelSU + SUSFS v2.2.0 on the proven 6.1.173 base. susfs4ksu patches
+# into its driver, built on the PROVEN 6.1.173 base (main / BBR root). On 6.1.173
+# the SUSFS fs-side applies cleanly (no 6.1.174 namespace.c drift). This isolates
+# the SUSFS-version bump on a known-good base.
+
+on:
+  push:
+    branches: [ gki-clean-6.1.173 ]
+    paths-ignore: [ '**/*.md' ]
+  workflow_dispatch:
+
+concurrency:
+  group: susfs173-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  SUSFS_BRANCH: gki-android14-6.1
+  KBUILD_BUILD_USER: build
+  KBUILD_BUILD_HOST: localhost
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: gki-clean-6.1.173
+          fetch-depth: 1
+
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends bc bison flex build-essential \
+            libssl-dev libncurses-dev libelf-dev zlib1g-dev pkg-config git curl zip cpio \
+            kmod python3 ccache lld llvm dwarves
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ccache-susfs173-${{ github.sha }}
+          restore-keys: ccache-susfs173-
+      - id: clang
+        uses: actions/cache@v4
+        with:
+          path: ~/clang
+          key: clang-kei-r547379
+      - if: steps.clang.outputs.cache-hit != 'true'
+        run: rm -rf "$HOME/clang"; git clone --depth=1 https://gitlab.com/kei-space/clang/r547379 "$HOME/clang"
+      - run: echo "$HOME/clang/bin" >> "$GITHUB_PATH"
+
+      - name: Integrate KernelSU-Next + SUSFS v2.2.0 (pershoot matched fork)
+        run: |
+          set -euo pipefail
+          # pershoot maintains a KernelSU-Next fork with SUSFS PRE-INTEGRATED
+          # (next-susfs branch) paired with pershoot/susfs4ksu gki-android14-6.1-dev.
+          # Matched pair, driver needs no patching. This is the reference KSUN+SUSFS.
+          # pershoot's next-susfs driver drifted AHEAD of the susfs4ksu fs (uses
+          # symbols like DATA_ADB_NO_AUTO_ADD_SUS_BIND_MOUNT not yet in the fs
+          # headers). Pin the driver to 9c46185e — the commit before that drift —
+          # to match susfs4ksu gki-android14-6.1-dev (v2.2.0).
+          git clone -b next-susfs https://github.com/pershoot/KernelSU-Next KernelSU
+          git -C KernelSU checkout 9c46185e
+          ln -sf ../KernelSU/kernel drivers/kernelsu
+          grep -q 'drivers/kernelsu/Kconfig' drivers/Kconfig || sed -i '/^endmenu/i source "drivers/kernelsu/Kconfig"' drivers/Kconfig
+          grep -q 'obj-$(CONFIG_KSU)' drivers/Makefile || printf '\nobj-$(CONFIG_KSU) += kernelsu/\n' >> drivers/Makefile
+          git clone --depth=1 -b gki-android14-6.1-dev https://gitlab.com/pershoot/susfs4ksu.git susfs4ksu
+          echo "[i] SUSFS $(sed -n 's/.*SUSFS_VERSION[^"]*"\([^"]*\)".*/\1/p' susfs4ksu/kernel_patches/include/linux/susfs.h)"
+          # fs-side SUSFS v2.2.0 hooks (matched to the driver)
+          cp -v susfs4ksu/kernel_patches/fs/*.c fs/ 2>/dev/null || true
+          cp -v susfs4ksu/kernel_patches/include/linux/*.h include/linux/ 2>/dev/null || true
+          patch -p1 --fuzz=3 < "susfs4ksu/kernel_patches/50_add_susfs_in_${SUSFS_BRANCH}.patch" || true
+          # namespace.c susfs decls (idempotent; only if a hunk shifted)
+          python3 - <<'PY'
+          f="fs/namespace.c"; s=open(f).read()
+          inc="#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\n#include <linux/susfs_def.h>\n#endif\n"
+          ext=("#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\n"
+               "extern bool susfs_is_current_ksu_domain(void);\n"
+               "extern struct static_key_true susfs_is_sdcard_android_data_not_decrypted;\n"
+               "#define CL_COPY_MNT_NS BIT(25)\n#endif\n")
+          if "susfs_def.h" not in s:
+              s=s.replace("#include <linux/mnt_idmapping.h>\n","#include <linux/mnt_idmapping.h>\n"+inc,1)
+          if "extern bool susfs_is_current_ksu_domain" not in s:
+              s=s.replace('#include "internal.h"\n','#include "internal.h"\n'+ext,1)
+          open(f,"w").write(s)
+          PY
+          rm -f fs/namespace.c.rej fs/namespace.c.orig
+          # KSUN+SUSFS guide: empty the protected-exports lists so vendor wifi/bt
+          # modules still load after the susfs symbol additions.
+          for f in android/abi_gki_protected_exports_aarch64 android/abi_gki_protected_exports_x86_64; do
+            [ -f "$f" ] && : > "$f" && echo "[+] emptied $f"
+          done
+          REJ="$(find . -name '*.rej')"
+          if [ -n "$REJ" ]; then echo "::error::SUSFS rejects:"; for r in $REJ; do echo "== $r =="; cat "$r"; done; exit 1; fi
+          echo "[+] KernelSU-Next + SUSFS v2.2.0 integrated on 6.1.173"
+
+      - name: Configure + build
+        run: |
+          set -euo pipefail
+          export ARCH=arm64 SUBARCH=arm64 PATH="$HOME/clang/bin:$PATH"
+          make -j"$(nproc --all)" O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 gki_defconfig
+          C=./scripts/config
+          $C --file out/.config -e KSU
+          for o in KSU_SUSFS KSU_SUSFS_SUS_PATH KSU_SUSFS_SUS_MOUNT KSU_SUSFS_SUS_KSTAT \
+                   KSU_SUSFS_SUS_MAP KSU_SUSFS_SPOOF_UNAME KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG \
+                   KSU_SUSFS_OPEN_REDIRECT KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS KPM; do
+            $C --file out/.config -e "$o" || true; done
+          $C --file out/.config -d KSU_SUSFS_ENABLE_LOG || true
+          make -j"$(nproc --all)" O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 olddefconfig
+          grep -E 'CONFIG_KSU|SUSFS' out/.config | grep '=y' | head
+          export KBUILD_COMPILER_STRING="$(clang --version | head -n1)"
+          make -j"$(nproc --all)" O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CC="ccache clang" 2>&1 | tee build.log
+
+      - name: Package + release
+        run: |
+          set -euo pipefail
+          IMG=out/arch/arm64/boot/Image; [ -f "$IMG" ] || { echo "no Image"; exit 1; }
+          rm -rf AnyKernel3; cp -r anykernel AnyKernel3; cp "$IMG" AnyKernel3/Image
+          VER="$(cat out/include/config/kernel.release 2>/dev/null || echo 6.1.173)"
+          ZIP="Theettam-KSUNext-SUSFS2.2.0-peridot-${VER}-$(date +%Y%m%d-%H%M).zip"
+          ( cd AnyKernel3 && zip -r9 "../$ZIP" . -x '.git*' )
+          echo "ZIP=$ZIP" >> "$GITHUB_ENV"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: susfs173-zip
+          path: ${{ env.ZIP }}
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: build-log
+          path: build.log
+          if-no-files-found: ignore
+      - uses: softprops/action-gh-release@v2
+        if: success()
+        with:
+          tag_name: susfs173-${{ github.run_number }}
+          prerelease: true
+          name: KernelSU-Next + SUSFS v2.2.0 on 6.1.173 (alpha) #${{ github.run_number }}
+          body: "KernelSU-Next (pershoot next-susfs) + SUSFS v2.2.0 on proven 6.1.173 base. Use the KernelSU-Next manager app."
+          files: "${{ env.ZIP }}"

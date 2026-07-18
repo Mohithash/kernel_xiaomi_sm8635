@@ -80,6 +80,8 @@ static void drain_openssl_errors(void)
 		}					\
 	} while(0)
 
+/* keep unconditional: this tree uses key_pass from the
+ * #elif defined(HAVE_OPENSSL_ENGINE) branch below. */
 static const char *key_pass;
 static BIO *wb;
 static char *cert_dst;
@@ -109,7 +111,7 @@ int main(int argc, char **argv)
 
 	kbuild_verbose = atoi(getenv("KBUILD_VERBOSE")?:"0");
 
-        key_pass = getenv("KBUILD_SIGN_PIN");
+	key_pass = getenv("KBUILD_SIGN_PIN");
 
 	if (argc != 3)
 		format();

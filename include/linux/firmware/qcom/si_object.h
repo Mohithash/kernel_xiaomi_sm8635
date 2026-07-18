@@ -171,8 +171,9 @@ struct si_object {
 	struct kref refcount;
 
 	enum si_object_type object_type;
-	union object_info {
+	struct object_info {
 		unsigned long object_ptr;
+		unsigned long long object_cookie;
 	} info;
 
 	struct si_object_operations *ops;
