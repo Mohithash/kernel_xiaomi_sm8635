@@ -42,3 +42,10 @@ export PATH=/root/claude/clang/bin:$PATH
 bash theettam/scripts/integrate_root.sh ksun_susfs
 bash theettam/scripts/build_theettam.sh
 ```
+
+## Premium branch (`theettam-premium-sukisu`)
+
+- SukiSU-Ultra: `278d822a4ebd214bcfd774b7910cb11cdc560bb9`
+- SUSFS: official integrate via `scripts/susfs/integrate.sh`
+- Droidspaces: enabled in `theettam_GKI.config`
+- `drivers/kernelsu` committed in-tree

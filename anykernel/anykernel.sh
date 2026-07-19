@@ -4,7 +4,7 @@
 ### AnyKernel setup
 # global properties
 properties() { '
-kernel.string=Theettam Kernel for peridot (SM8635)
+kernel.string=Theettam Premium (SukiSU+SUSFS+Droidspaces) peridot
 do.devicecheck=0
 do.modules=0
 do.systemless=0
