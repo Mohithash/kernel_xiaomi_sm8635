@@ -4,10 +4,10 @@
 ### AnyKernel setup
 # global properties
 properties() { '
-kernel.string=Theettam Premium (SukiSU+SUSFS+Droidspaces) peridot
+kernel.string=Theettam Premium Alpha-2 (bootable) peridot
 do.devicecheck=0
-do.modules=1
-do.systemless=1
+do.modules=0
+do.systemless=0
 do.cleanup=1
 do.cleanuponabort=0
 device.name1=peridot

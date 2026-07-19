@@ -42,3 +42,16 @@ See `theettam/build/sysctl.theettam.conf`.
 - Dual SukiSU+KSUN in one Image (split branches)
 - Hand-edited VFS for SUSFS (official 50_ only)
 - Force CLO unrelated-histories merge (deferred)
+
+## Bootability override (alpha-2)
+
+Research wanted full cgroup/netfilter matrix. **On-device GKI reality (peridot):**
+
+| Config | Research | Bootable |
+|--------|----------|----------|
+| CGROUP_DEVICE / CGROUP_PIDS | want | **OFF** (vendor CRC) |
+| BRIDGE_NETFILTER / NF_TABLES | want | **OFF** (sched CRC) |
+| USER_NS / PID_NS / SYSVIPC | want | ON |
+| Basic NAT / veth / macvlan | want | ON (no bridge-nf) |
+
+See `BOOT_NOTES.md`.
