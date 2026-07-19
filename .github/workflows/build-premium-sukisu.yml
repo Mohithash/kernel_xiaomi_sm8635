@@ -47,10 +47,14 @@ jobs:
                    KSU_SUSFS_SPOOF_UNAME KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS \
                    KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG KSU_SUSFS_OPEN_REDIRECT KSU_SUSFS_SUS_MAP \
                    USER_NS NAMESPACES VETH MACVLAN NETFILTER_XT_MATCH_MULTIPORT \
-                   SCHED_BORE MQ_IOSCHED_ADIOS MQ_IOSCHED_DEFAULT_ADIOS; do
+                   SCHED_BORE MQ_IOSCHED_ADIOS MQ_IOSCHED_DEFAULT_ADIOS MQ_IOSCHED_DEADLINE \
+                   TCP_CONG_BBR DEFAULT_BBR NET_SCH_CAKE NET_SCH_FQ_CODEL NET_SCH_FQ \
+                   SECCOMP SECCOMP_FILTER KALLSYMS KALLSYMS_ALL; do
             $C --file out/.config -e "$o" || true
           done
+          $C --file out/.config --set-str DEFAULT_TCP_CONG bbr || true
           $C --file out/.config -m BOEFFLA_WL_BLOCKER -m WIREGUARD || true
+          $C --file out/.config -e LTO_CLANG_THIN 2>/dev/null || true
           $C --file out/.config -d KSU_SUSFS_ENABLE_LOG || true
           make -j"$(nproc)" O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 olddefconfig
           echo "---- key config ----"

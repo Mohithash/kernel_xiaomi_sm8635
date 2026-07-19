@@ -2,6 +2,14 @@
 # Theettam production build — GKI 6.1.175 / peridot / VoltageOS
 # Respects KMI: KMI_SYMBOL_LIST_STRICT_MODE=1
 set -euo pipefail
+# Research Phase-1 build env
+if [ -f theettam/build/build.config.theettam ]; then
+  # shellcheck disable=SC1091
+  source theettam/build/build.config.theettam
+fi
+export KMI_SYMBOL_LIST_STRICT_MODE="${KMI_SYMBOL_LIST_STRICT_MODE:-1}"
+export TRIM_NONLISTED_KMI="${TRIM_NONLISTED_KMI:-1}"
+
 
 DIR=$(readlink -f .)
 MAIN=$(readlink -f "${DIR}/..")

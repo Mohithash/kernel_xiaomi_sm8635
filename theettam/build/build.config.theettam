@@ -1,0 +1,10 @@
+# Theettam GKI build fragment — source from CI / build_theettam.sh
+# Research Phase 1: KMI strict + trim nonlisted + LZ4 boot artifacts
+
+export KMI_SYMBOL_LIST_STRICT_MODE=1
+export TRIM_NONLISTED_KMI=1
+export LLVM=1
+export LLVM_IAS=1
+
+# Prefer LZ4 compressed Image when packaging (GKI build system also sets LZ4 sizes)
+export THEETTAM_COMPRESS=lz4

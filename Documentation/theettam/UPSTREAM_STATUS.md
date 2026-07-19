@@ -49,3 +49,10 @@ bash theettam/scripts/build_theettam.sh
 - SUSFS: official integrate via `scripts/susfs/integrate.sh`
 - Droidspaces: enabled in `theettam_GKI.config`
 - `drivers/kernelsu` committed in-tree
+
+## RESEARCH 100% (premium)
+
+- BBRv3: **in-tree** (`#define BBR_VERSION 3` in `net/ipv4/tcp_bbr.c`) — patch series already applied
+- CAKE: enabled in `theettam_GKI.config`
+- Build env: `theettam/build/build.config.theettam` (KMI strict + TRIM)
+- Matrix: `Documentation/theettam/RESEARCH_COMPLIANCE.md`

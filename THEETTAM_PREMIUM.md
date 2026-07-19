@@ -1,21 +1,12 @@
-# Theettam Premium (this branch)
+# Theettam Premium
 
-Cleanest premium peridot kernel for VoltageOS:
+Research **100%** branch for VoltageOS / peridot:
 
-1. **SukiSU-Ultra** + **KPM** (integrated in-tree)
-2. **SUSFS v2.2.0** (full hiding stack via official VFS patch path)
-3. **Droidspaces-ready** (`CONFIG_USER_NS` + container networking)
-4. **BORE + ADIOS + PELT 8ms + Boeffla**
+- SukiSU-Ultra + KPM + SUSFS 2.2.0  
+- Droidspaces (USER_NS + container net)  
+- BORE + PELT 8ms + HZ 300  
+- **BBRv3** (already in tree) + **CAKE**  
+- Boeffla, modular modules_install  
+- KMI strict + TRIM_NONLISTED_KMI  
 
-See `Documentation/theettam/PREMIUM.md`.
-
-Root is **committed** on this branch (not CI-time only).
-
-## Modular (Image + modules)
-
-Devs: this branch **makes modules**, not Image-only.
-
-- Full tree: `dist/Theettam-modules-full-*.tar.gz` (`modules_install`)
-- Flash extras: AnyKernel `do.modules=1` + `do.systemless=1`
-- Docs: `Documentation/theettam/MODULES.md`
-
+Docs: `Documentation/theettam/RESEARCH_COMPLIANCE.md`
