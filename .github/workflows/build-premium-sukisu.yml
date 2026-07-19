@@ -47,30 +47,30 @@ jobs:
                    KSU_SUSFS_SPOOF_UNAME KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS \
                    KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG KSU_SUSFS_OPEN_REDIRECT KSU_SUSFS_SUS_MAP \
                    USER_NS NAMESPACES VETH MACVLAN NETFILTER_XT_MATCH_MULTIPORT \
-                   SCHED_BORE MQ_IOSCHED_ADIOS MQ_IOSCHED_DEFAULT_ADIOS MQ_IOSCHED_DEADLINE \
-                   TCP_CONG_BBR DEFAULT_BBR NET_SCH_CAKE NET_SCH_FQ_CODEL NET_SCH_FQ \
-                   SECCOMP SECCOMP_FILTER KALLSYMS KALLSYMS_ALL; do
+                   SCHED_BORE MQ_IOSCHED_ADIOS MQ_IOSCHED_DEFAULT_ADIOS \
+                   TCP_CONG_BBR DEFAULT_BBR NET_SCH_CAKE NET_SCH_FQ_CODEL \
+                   SECCOMP SECCOMP_FILTER KALLSYMS KALLSYMS_ALL BOEFFLA_WL_BLOCKER; do
             $C --file out/.config -e "$o" || true
           done
           $C --file out/.config --set-str DEFAULT_TCP_CONG bbr || true
-          $C --file out/.config -m BOEFFLA_WL_BLOCKER -m WIREGUARD || true
-          $C --file out/.config -e LTO_CLANG_THIN 2>/dev/null || true
           $C --file out/.config -d KSU_SUSFS_ENABLE_LOG || true
           make -j"$(nproc)" O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 olddefconfig
-          echo "---- key config ----"
-          grep -E 'CONFIG_KSU=|CONFIG_KSU_SUSFS=|CONFIG_USER_NS=|CONFIG_BOEFFLA|CONFIG_WIREGUARD|CONFIG_MODULES=|CONFIG_SCHED_BORE=' out/.config | head -40
+          grep -E 'CONFIG_KSU=|CONFIG_KSU_SUSFS=|CONFIG_USER_NS=|CONFIG_TCP_CONG_BBR|CONFIG_NET_SCH_CAKE|CONFIG_BOEFFLA' out/.config | head -40
       - name: Build Image + modules
         run: |
+          set -euo pipefail
           export ARCH=arm64 PATH="$HOME/clang/bin:$PATH" KMI_SYMBOL_LIST_STRICT_MODE=1
-          make -j"$(nproc)" O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 KCFLAGS="-Wno-error=array-bounds" 2>&1 | tee build.log
-          make -j"$(nproc)" O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 KCFLAGS="-Wno-error=array-bounds" modules 2>&1 | tee -a build.log || true
-           - name: Package modules + zip
+          export KCFLAGS="-Wno-error=array-bounds"
+          make -j"$(nproc)" O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 KCFLAGS="$KCFLAGS" 2>&1 | tee build.log
+          make -j"$(nproc)" O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 KCFLAGS="$KCFLAGS" modules 2>&1 | tee -a build.log || true
+          test -f out/arch/arm64/boot/Image
+          ls -lh out/arch/arm64/boot/Image
+      - name: Package modules + zip
         run: |
           set -euo pipefail
           export PATH="$HOME/clang/bin:$PATH" THEETTAM_CLANG="$HOME/clang/bin"
           IMG=out/arch/arm64/boot/Image
           test -f "$IMG"
-          # Do NOT re-run full kernel make here — only package existing build
           OUT=out bash theettam/scripts/package_modules.sh || echo "WARN: package_modules non-zero"
           rm -rf AnyKernel3
           cp -a anykernel AnyKernel3
@@ -80,7 +80,6 @@ jobs:
           ( cd AnyKernel3 && zip -r9 "../$ZIP" . -x '.git*' )
           echo "ZIP=$ZIP" >> "$GITHUB_ENV"
           ls -lah "$ZIP" dist/ || true
-
       - uses: actions/upload-artifact@v4
         with:
           name: theettam-premium-zip
@@ -94,11 +93,6 @@ jobs:
         with:
           name: theettam-modules-extras
           path: dist/Theettam-modules-extras-*.tar.gz
-          if-no-files-found: warn
-      - uses: actions/upload-artifact@v4
-        with:
-          name: theettam-modules-manifest
-          path: dist/MODULES_MANIFEST.txt
           if-no-files-found: warn
       - uses: actions/upload-artifact@v4
         if: always()
