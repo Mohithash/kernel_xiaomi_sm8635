@@ -569,6 +569,12 @@ static bool wakeup_source_not_registered(struct wakeup_source *ws)
  */
 static void wakeup_source_activate(struct wakeup_source *ws)
 {
+#ifdef CONFIG_BOEFFLA_WL_BLOCKER
+	if (ws && ws->name && theettam_wl_should_block(ws->name)) {
+		ws->last_time = ktime_get();
+		return;
+	}
+#endif
 	unsigned int cec;
 
 	if (WARN_ONCE(wakeup_source_not_registered(ws),
