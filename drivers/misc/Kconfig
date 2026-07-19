@@ -572,4 +572,10 @@ source "drivers/misc/pvpanic/Kconfig"
 source "drivers/misc/mchp_pci1xxxx/Kconfig"
 source "drivers/misc/vd628x/Kconfig"
 source "drivers/misc/hwid/Kconfig"
+config BOEFFLA_WL_BLOCKER
+	bool "Boeffla wakelock blocker (Theettam)"
+	default n
+	help
+	  Runtime wakelock block list for qcom_rx_wakelock etc.
+
 endmenu
