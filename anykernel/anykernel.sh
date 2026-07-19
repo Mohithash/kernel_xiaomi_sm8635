@@ -6,8 +6,8 @@
 properties() { '
 kernel.string=Theettam Premium (SukiSU+SUSFS+Droidspaces) peridot
 do.devicecheck=0
-do.modules=0
-do.systemless=0
+do.modules=1
+do.systemless=1
 do.cleanup=1
 do.cleanuponabort=0
 device.name1=peridot
@@ -30,7 +30,7 @@ no_magisk_check=1
 
 kernel_version=$(cat /proc/version | awk -F '-' '{print $1}' | awk '{print $3}')
 
-ui_print "Flashing Chidori Kernel..."
+ui_print "Flashing Theettam Premium (Image + modules)..."
 ui_print "Kernel version detected:".$kernel_version
 
 # boot install

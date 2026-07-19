@@ -83,7 +83,10 @@ if [ ! -f "$ZIMG" ] && [ -f "$IMG" ]; then
 fi
 test -f "$ZIMG" -o -f "$IMG"
 
-# Package
+# Modules (the missing piece: Image alone is not enough for GKI/devs)
+bash theettam/scripts/package_modules.sh
+
+# Package AnyKernel zip (Image + modular extras)
 TIME=$(date -u +%Y%m%d-%H%M%S)
 NAME="Theettam-Kernel-peridot-${TIME}.zip"
 rm -rf .ak3_pack
@@ -94,3 +97,4 @@ else cp -f "$IMG" .ak3_pack/Image; gzip -9 -c .ak3_pack/Image > .ak3_pack/Image.
 ( cd .ak3_pack && zip -r9 "../$NAME" . )
 echo "PACKAGED $NAME"
 ls -lah "$NAME"
+ls -lah dist/ 2>/dev/null || true

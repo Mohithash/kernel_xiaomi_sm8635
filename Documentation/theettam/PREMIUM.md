@@ -25,3 +25,8 @@ make O=out LLVM=1 LLVM_IAS=1 \
   gki_defconfig vendor/pineapple_GKI.config vendor/peridot_GKI.config vendor/theettam_GKI.config
 make O=out LLVM=1 LLVM_IAS=1 -j$(nproc)
 ```
+
+## Modules
+
+See [`MODULES.md`](MODULES.md). Image-only kernels are incomplete on GKI —
+this branch packages `modules_install` + AnyKernel modular extras.
