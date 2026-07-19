@@ -596,7 +596,7 @@ static void wakeup_source_activate(struct wakeup_source *ws)
 static void wakeup_source_report_event(struct wakeup_source *ws, bool hard)
 {
 #ifdef CONFIG_BOEFFLA_WL_BLOCKER
-	if (!check_for_block(ws))	// AP: check if wakelock is on wakelock blocker list
+	if (!(ws && ws->name && theettam_wl_should_block(ws->name)))	// AP: check if wakelock is on wakelock blocker list
 	{
 #endif
 	ws->event_count++;
@@ -903,7 +903,7 @@ void pm_print_active_wakeup_sources(void)
 		if (ws->active) {
 			pm_pr_dbg("active wakeup source: %s\n", ws->name);
 #ifdef CONFIG_BOEFFLA_WL_BLOCKER
-			if (!check_for_block(ws))	// AP: check if wakelock is on wakelock blocker list
+			if (!(ws && ws->name && theettam_wl_should_block(ws->name)))	// AP: check if wakelock is on wakelock blocker list
 #endif
 			active = 1;
 		} else if (!active &&
