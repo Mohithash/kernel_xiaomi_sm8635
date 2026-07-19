@@ -96,7 +96,9 @@ struct device_private {
 	char *deferred_probe_reason;
 	struct device *device;
 	u8 dead:1;
+	u8 ready_to_probe:1;
 };
+
 #define to_device_private_parent(obj)	\
 	container_of(obj, struct device_private, knode_parent)
 #define to_device_private_driver(obj)	\
@@ -105,6 +107,21 @@ struct device_private {
 	container_of(obj, struct device_private, knode_bus)
 #define to_device_private_class(obj)	\
 	container_of(obj, struct device_private, knode_class)
+
+/* Incomplete LTS port helpers (device_add / deferred probe gate) */
+static inline void dev_set_ready_to_probe(struct device *dev)
+{
+	if (dev && dev->p)
+		dev->p->ready_to_probe = 1;
+}
+
+static inline bool dev_ready_to_probe(struct device *dev)
+{
+	/* No private yet => treat as ready (legacy path) */
+	if (!dev || !dev->p)
+		return true;
+	return !!dev->p->ready_to_probe;
+}
 
 /* initialisation functions */
 extern int devices_init(void);
