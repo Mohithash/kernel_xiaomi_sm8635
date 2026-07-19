@@ -34,6 +34,7 @@ static struct {
 	struct kthread_work work;
 	struct task_struct *task;
 	int local_node;
+	void (*saved_data_ready)(struct sock *sk);
 } qrtr_ns;
 
 static const char * const qrtr_ctrl_pkt_strings[] = {
