@@ -43,13 +43,30 @@ fi
 rm -rf "$MOD_STAGE"
 mkdir -p "$MOD_STAGE" "$ARTIFACTS"
 
+# Ensure modules built; tolerate all-built-in kernels
+make -j"$(nproc)" O="$OUT" modules \
+  CC=clang LD=ld.lld AR=llvm-ar NM=llvm-nm \
+  OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip \
+  HOSTCC=clang HOSTCXX=clang++ HOSTLD=ld.lld || true
+if [ ! -f "$OUT/modules.order" ]; then
+  echo "WARN: no modules.order — creating empty (all-built-in?)"
+  : > "$OUT/modules.order"
+fi
+
 # Install all built modules (and modules.dep / modules.alias …)
+set +e
 make -j"$(nproc)" O="$OUT" modules_install \
   INSTALL_MOD_PATH="$MOD_STAGE" \
   INSTALL_MOD_STRIP=1 \
   CC=clang LD=ld.lld AR=llvm-ar NM=llvm-nm \
   OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump STRIP=llvm-strip \
   HOSTCC=clang HOSTCXX=clang++ HOSTLD=ld.lld
+MI_RC=$?
+set -e
+if [ "$MI_RC" -ne 0 ]; then
+  echo "WARN: modules_install rc=$MI_RC — continuing Image-only packaging"
+  mkdir -p "$MOD_INSTALL/$(cat $OUT/include/config/kernel.release 2>/dev/null || echo unknown)"
+fi
 
 # Resolve install dir (lib/modules/<release>)
 INST=$(find "$MOD_INSTALL" -mindepth 1 -maxdepth 1 -type d | head -1)
