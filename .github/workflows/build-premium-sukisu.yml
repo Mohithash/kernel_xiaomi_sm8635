@@ -1,0 +1,101 @@
+name: Theettam Premium — SukiSU-Ultra + SUSFS + Droidspaces + Modules
+on:
+  workflow_dispatch:
+  push:
+    branches: [ theettam-premium-sukisu ]
+    paths-ignore: [ '**/*.md' ]
+permissions:
+  contents: write
+concurrency:
+  group: premium-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  KBUILD_BUILD_USER: theettam
+  KBUILD_BUILD_HOST: premium
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends bc bison flex build-essential \
+            libssl-dev libelf-dev zlib1g-dev pkg-config git curl zip python3 ccache lld llvm dwarves rsync
+      - uses: actions/cache@v4
+        with:
+          path: ~/clang
+          key: clang-kei-r547379
+      - name: Clang
+        run: |
+          if [ ! -x "$HOME/clang/bin/clang" ]; then
+            git clone --depth=1 https://gitlab.com/kei-space/clang/r547379 "$HOME/clang"
+          fi
+          echo "$HOME/clang/bin" >> "$GITHUB_PATH"
+      - name: Configure
+        run: |
+          set -euo pipefail
+          export ARCH=arm64 PATH="$HOME/clang/bin:$PATH"
+          make -j"$(nproc)" O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 \
+            gki_defconfig vendor/pineapple_GKI.config vendor/peridot_GKI.config vendor/theettam_GKI.config
+          C=./scripts/config
+          $C --file out/.config -e MODULES -e MODULE_UNLOAD -e MODVERSIONS || true
+          $C --file out/.config -e KSU -e KPM || true
+          for o in KSU_SUSFS KSU_SUSFS_SUS_PATH KSU_SUSFS_SUS_MOUNT KSU_SUSFS_SUS_KSTAT \
+                   KSU_SUSFS_SPOOF_UNAME KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS \
+                   KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG KSU_SUSFS_OPEN_REDIRECT KSU_SUSFS_SUS_MAP \
+                   USER_NS NAMESPACES VETH MACVLAN NETFILTER_XT_MATCH_MULTIPORT \
+                   SCHED_BORE MQ_IOSCHED_ADIOS MQ_IOSCHED_DEFAULT_ADIOS; do
+            $C --file out/.config -e "$o" || true
+          done
+          $C --file out/.config -m BOEFFLA_WL_BLOCKER -m WIREGUARD || true
+          $C --file out/.config -d KSU_SUSFS_ENABLE_LOG || true
+          make -j"$(nproc)" O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 olddefconfig
+          echo "---- key config ----"
+          grep -E 'CONFIG_KSU=|CONFIG_KSU_SUSFS=|CONFIG_USER_NS=|CONFIG_BOEFFLA|CONFIG_WIREGUARD|CONFIG_MODULES=|CONFIG_SCHED_BORE=' out/.config | head -40
+      - name: Build Image + modules
+        run: |
+          export ARCH=arm64 PATH="$HOME/clang/bin:$PATH" KMI_SYMBOL_LIST_STRICT_MODE=1
+          make -j"$(nproc)" O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 2>&1 | tee build.log
+          make -j"$(nproc)" O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 modules 2>&1 | tee -a build.log
+      - name: Package modules + zip
+        run: |
+          export PATH="$HOME/clang/bin:$PATH" THEETTAM_CLANG="$HOME/clang/bin"
+          OUT=out bash theettam/scripts/package_modules.sh
+          IMG=out/arch/arm64/boot/Image
+          test -f "$IMG"
+          rm -rf AnyKernel3
+          cp -a anykernel AnyKernel3
+          cp "$IMG" AnyKernel3/Image
+          VER="$(cat out/include/config/kernel.release 2>/dev/null || echo 6.1.175)"
+          ZIP="Theettam-Premium-SukiSU-SUSFS-Droidspaces-peridot-${VER}-$(date +%Y%m%d-%H%M).zip"
+          ( cd AnyKernel3 && zip -r9 "../$ZIP" . -x '.git*' )
+          echo "ZIP=$ZIP" >> "$GITHUB_ENV"
+          ls -lah "$ZIP" dist/ || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: theettam-premium-zip
+          path: ${{ env.ZIP }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: theettam-modules-full
+          path: dist/Theettam-modules-full-*.tar.gz
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        with:
+          name: theettam-modules-extras
+          path: dist/Theettam-modules-extras-*.tar.gz
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        with:
+          name: theettam-modules-manifest
+          path: dist/MODULES_MANIFEST.txt
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: build-log
+          path: build.log
+          if-no-files-found: ignore
