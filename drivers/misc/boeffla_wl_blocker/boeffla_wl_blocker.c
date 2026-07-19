@@ -142,7 +142,6 @@ static struct miscdevice boeffla_misc = {
 static int __init boeffla_wl_blocker_init(void)
 {
 	int ret;
-	unsigned long flags;
 
 	list1 = kstrdup(BOEFFLA_WLBLOCKER_DEFAULTS, GFP_KERNEL);
 	if (!list1)

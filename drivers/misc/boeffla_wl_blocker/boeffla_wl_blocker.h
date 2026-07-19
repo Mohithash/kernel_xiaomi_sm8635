@@ -13,4 +13,7 @@
 	"qcom_rx_wakelock;wlan;wlan_wow_wl;wlan_extscan_wl;netmgr_wl;IPA_WS;" \
 	"NETLINK;ipa;qcom_rx_wakelock;"
 
+/* Used by drivers/base/power/wakeup.c */
+bool theettam_wl_should_block(const char *name);
+
 #endif /* _BOEFFLA_WL_BLOCKER_H */
