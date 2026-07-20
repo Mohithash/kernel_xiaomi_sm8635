@@ -34,9 +34,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential flex bison libssl-dev libelf-dev bc cpio \
-            git python3 wget curl ccache
+            git python3 wget curl ccache pahole
 
-      - name: Cache ccache
+      - name: Cache ccache pahole
         uses: actions/cache@v4
         with:
           path: ~/.ccache

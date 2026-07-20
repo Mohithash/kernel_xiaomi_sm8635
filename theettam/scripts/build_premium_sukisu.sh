@@ -17,6 +17,14 @@ mkdir -p "$STAMP_DIR" dist logs
 
 log(){ echo "[$(date -u +%H:%M:%S)] $*"; }
 
+# CI: disable BTF — runners often fail pahole/BTF on vmlinux
+disable_btf() {
+  local cfg="$1"
+  ./scripts/config --file "$cfg" --disable CONFIG_DEBUG_INFO_BTF || true
+  ./scripts/config --file "$cfg" --disable CONFIG_DEBUG_INFO_BTF_MODULES || true
+}
+
+
 # --- pins (BOOT-NOTES / proven) ---
 SUKISU_REPO="${SUKISU_REPO:-https://github.com/SukiSU-Ultra/SukiSU-Ultra}"
 SUKISU_REF="${SUKISU_REF:-susfs_new}"
@@ -33,8 +41,10 @@ if [[ "${SKIP_BASELINE:-0}" != "1" ]]; then
   rm -rf "$OUT_BASE"
   mkdir -p "$OUT_BASE"
   make O="$OUT_BASE" gki_defconfig
+  disable_btf "$OUT_BASE/.config"
+  make O="$OUT_BASE" olddefconfig
   # Match shipping v2.1-ish: BORE/ADIOS already in gki_defconfig
-  make -j"$JOBS" O="$OUT_BASE" Image modules 2>&1 | tee logs/baseline_build.log
+  make -j"$JOBS" O="$OUT_BASE" Image 2>&1 | tee logs/baseline_build.log
   test -f "$OUT_BASE/Module.symvers"
   cp -f "$OUT_BASE/Module.symvers" "$STAMP_DIR/Module.symvers.baseline"
   log "baseline symvers saved"
@@ -91,6 +101,8 @@ for o in CGROUP_PIDS CGROUP_DEVICE NF_TABLES BRIDGE_NETFILTER NETFILTER_XT_MATCH
   ./scripts/config --file "$OUT/.config" --disable "CONFIG_$o" || true
 done
 make O="$OUT" olddefconfig
+disable_btf "$OUT/.config"
+make O="$OUT" olddefconfig
 
 # Sanity forbidden off
 for o in CGROUP_PIDS CGROUP_DEVICE NF_TABLES BRIDGE_NETFILTER; do
@@ -106,7 +118,7 @@ grep -q '^CONFIG_SYSVIPC=y' "$OUT/.config" || { echo "::error::SYSVIPC missing a
 # Phase 3: build premium
 ############################################
 log "=== PREMIUM build ==="
-make -j"$JOBS" O="$OUT" Image modules 2>&1 | tee logs/premium_build.log
+make -j"$JOBS" O="$OUT" Image 2>&1 | tee logs/premium_build.log
 test -f "$OUT/arch/arm64/boot/Image"
 test -f "$OUT/Module.symvers"
 cp -f "$OUT/Module.symvers" "$STAMP_DIR/Module.symvers.premium"
