@@ -45,7 +45,8 @@ if [[ "${SKIP_BASELINE:-0}" != "1" ]]; then
   make O="$OUT_BASE" olddefconfig
   # Match shipping v2.1-ish: BORE/ADIOS already in gki_defconfig
   make -j"$JOBS" O="$OUT_BASE" Image 2>&1 | tee logs/baseline_build.log
-  test -f "$OUT_BASE/Module.symvers"
+  if [[ ! -f "$OUT_BASE/Module.symvers" && -f "$OUT_BASE/vmlinux.symvers" ]]; then cp -f "$OUT_BASE/vmlinux.symvers" "$OUT_BASE/Module.symvers"; fi
+test -f "$OUT_BASE/Module.symvers"
   cp -f "$OUT_BASE/Module.symvers" "$STAMP_DIR/Module.symvers.baseline"
   log "baseline symvers saved"
 fi
@@ -74,13 +75,28 @@ bash scripts/susfs/integrate-sukisu.sh "$PWD/KernelSU" "$PWD/susfs4ksu" "$PWD"
 log "=== DroidSpaces integrate.sh (task_struct reserve) ==="
 bash scripts/droidspaces/integrate.sh
 
+log "=== Wire SukiSU into drivers/kernelsu (required for CONFIG_KSU) ==="
+# integrate-* mutates KernelSU/ tree; link that kernel/ into drivers/
+rm -f drivers/kernelsu
+ln -sfn ../KernelSU/kernel drivers/kernelsu
+if ! grep -q 'drivers/kernelsu/Kconfig' drivers/Kconfig; then
+  sed -i '/^endmenu/i source "drivers/kernelsu/Kconfig"' drivers/Kconfig
+fi
+if ! grep -q 'obj-$(CONFIG_KSU)' drivers/Makefile; then
+  printf '\nobj-$(CONFIG_KSU) += kernelsu/\n' >> drivers/Makefile
+fi
+test -f drivers/kernelsu/Kconfig
+test -d drivers/kernelsu
+
+
 ############################################
 # Phase 2: configure premium
 ############################################
 rm -rf "$OUT"
 mkdir -p "$OUT"
 make O="$OUT" gki_defconfig
-# KPM + SUSFS options
+# KSU root + KPM + SUSFS options (CONFIG_KSU is mandatory — without it Image has no SukiSU)
+./scripts/config --file "$OUT/.config" --enable CONFIG_KSU || true
 ./scripts/config --file "$OUT/.config" --enable CONFIG_KPM || true
 for o in KSU_SUSFS KSU_SUSFS_SUS_PATH KSU_SUSFS_SUS_MOUNT KSU_SUSFS_SUS_KSTAT \
          KSU_SUSFS_SPOOF_UNAME KSU_SUSFS_ENABLE_LOG KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS \
@@ -113,6 +129,10 @@ done
 # Sanity required on
 grep -q '^CONFIG_SCHED_BORE=y' "$OUT/.config" || echo "::warning::BORE not set (base may name differently)"
 grep -q '^CONFIG_SYSVIPC=y' "$OUT/.config" || { echo "::error::SYSVIPC missing after droidspaces"; exit 1; }
+grep -q '^CONFIG_KSU=y' "$OUT/.config" || { echo "::error::CONFIG_KSU not enabled — SukiSU will not work"; exit 1; }
+grep -E '^CONFIG_KSU_SUSFS' "$OUT/.config" | head -5 || echo "::warning::no KSU_SUSFS options"
+grep -q '^CONFIG_KPM=y' "$OUT/.config" || echo "::warning::CONFIG_KPM not set"
+
 
 ############################################
 # Phase 3: build premium
