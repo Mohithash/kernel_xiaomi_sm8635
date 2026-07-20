@@ -17,6 +17,10 @@ mkdir -p "$STAMP_DIR" dist logs
 
 log(){ echo "[$(date -u +%H:%M:%S)] $*"; }
 
+# Call/IMS isolation: DroidSpaces (USER_NS/PID_NS/SYSVIPC/...) is the main premium-only
+# surface vs Theettam 2.1 SukiSU. Default OFF until VoLTE confirmed. Set SKIP_DROIDSPACES=0 to enable.
+SKIP_DROIDSPACES="${SKIP_DROIDSPACES:-1}"
+
 # CI: disable BTF — runners often fail pahole/BTF on vmlinux
 disable_btf() {
   local cfg="$1"
@@ -72,8 +76,12 @@ echo "[i] SUSFS $(git -C susfs4ksu rev-parse --short HEAD)"
 log "=== integrate-sukisu.sh ==="
 bash scripts/susfs/integrate-sukisu.sh "$PWD/KernelSU" "$PWD/susfs4ksu" "$PWD"
 
-log "=== DroidSpaces integrate.sh (task_struct reserve) ==="
-bash scripts/droidspaces/integrate.sh
+if [[ "${SKIP_DROIDSPACES:-1}" == "1" ]]; then
+  log "=== DroidSpaces SKIPPED (call/IMS isolation; match 2.1 SukiSU) ==="
+else
+  log "=== DroidSpaces integrate.sh (task_struct reserve) ==="
+  bash scripts/droidspaces/integrate.sh
+fi
 
 log "=== Wire SukiSU into drivers/kernelsu (required for CONFIG_KSU) ==="
 # integrate-* mutates KernelSU/ tree; link that kernel/ into drivers/
@@ -103,11 +111,15 @@ for o in KSU_SUSFS KSU_SUSFS_SUS_PATH KSU_SUSFS_SUS_MOUNT KSU_SUSFS_SUS_KSTAT \
          KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG KSU_SUSFS_OPEN_REDIRECT KSU_SUSFS_SUS_MAP; do
   ./scripts/config --file "$OUT/.config" --enable "CONFIG_$o" || true
 done
-# DroidSpaces safe list
-while read -r opt; do
-  [[ -z "$opt" || "$opt" =~ ^# ]] && continue
-  ./scripts/config --file "$OUT/.config" --enable "CONFIG_$opt" || true
-done < scripts/droidspaces/droidspaces.config
+# DroidSpaces safe list (optional)
+if [[ "${SKIP_DROIDSPACES:-1}" != "1" ]]; then
+  while read -r opt; do
+    [[ -z "$opt" || "$opt" =~ ^# ]] && continue
+    ./scripts/config --file "$OUT/.config" --enable "CONFIG_$opt" || true
+  done < scripts/droidspaces/droidspaces.config
+else
+  log "DroidSpaces config fragment skipped"
+fi
 # Premium fragment
 if [[ -f scripts/kconfig/merge_config.sh ]]; then
   bash scripts/kconfig/merge_config.sh -O "$OUT" -m "$OUT/.config" theettam/configs/theettam_premium.config || true
@@ -128,7 +140,9 @@ for o in CGROUP_PIDS CGROUP_DEVICE NF_TABLES BRIDGE_NETFILTER; do
 done
 # Sanity required on
 grep -q '^CONFIG_SCHED_BORE=y' "$OUT/.config" || echo "::warning::BORE not set (base may name differently)"
-grep -q '^CONFIG_SYSVIPC=y' "$OUT/.config" || { echo "::error::SYSVIPC missing after droidspaces"; exit 1; }
+if [[ "${SKIP_DROIDSPACES:-1}" != "1" ]]; then
+  grep -q '^CONFIG_SYSVIPC=y' "$OUT/.config" || { echo "::error::SYSVIPC missing after droidspaces"; exit 1; }
+fi
 grep -q '^CONFIG_KSU=y' "$OUT/.config" || { echo "::error::CONFIG_KSU not enabled — SukiSU will not work"; exit 1; }
 grep -E '^CONFIG_KSU_SUSFS' "$OUT/.config" | head -5 || echo "::warning::no KSU_SUSFS options"
 grep -q '^CONFIG_KPM=y' "$OUT/.config" || echo "::warning::CONFIG_KPM not set"
