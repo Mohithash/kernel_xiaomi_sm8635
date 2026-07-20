@@ -567,8 +567,29 @@ static bool wakeup_source_not_registered(struct wakeup_source *ws)
  * core of the event by incrementing the counter of the wakeup events being
  * processed.
  */
+
+/* Theettam: name-only wakelock blocklist (no struct wakeup_source fields). */
+static bool theettam_wl_should_block(const char *name)
+{
+	static const char * const block[] = {
+		"qcom_rx_wakelock",
+		NULL
+	};
+	const char * const *s;
+
+	if (!name)
+		return false;
+	for (s = block; *s; s++) {
+		if (!strcmp(name, *s))
+			return true;
+	}
+	return false;
+}
+
 static void wakeup_source_activate(struct wakeup_source *ws)
 {
+	if (theettam_wl_should_block(ws->name))
+		return;
 	unsigned int cec;
 
 	if (WARN_ONCE(wakeup_source_not_registered(ws),

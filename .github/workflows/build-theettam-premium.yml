@@ -1,0 +1,75 @@
+name: Theettam Premium — SukiSU+KPM+SUSFS+DroidSpaces (KABI gate)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [theettam-premium-sukisu]
+    paths:
+      - 'theettam/**'
+      - 'scripts/susfs/**'
+      - 'scripts/droidspaces/**'
+      - 'kernel/sched/sched-pelt.h'
+      - 'theettam/configs/**'
+      - '.github/workflows/build-theettam-premium.yml'
+
+concurrency:
+  group: premium-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  premium-kabi:
+    name: Premium build + Module.symvers CRC gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sanity — must be 6.1.175 base
+        run: |
+          grep -q '^SUBLEVEL = 175' Makefile || { echo "::error::SUBLEVEL != 175"; exit 1; }
+          test -f docs/BOOT-NOTES.md || { echo "::error::BOOT-NOTES missing"; exit 1; }
+          echo "HEAD=$(git rev-parse --short HEAD) SUBLEVEL=175"
+
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential flex bison libssl-dev libelf-dev bc cpio \
+            git python3 wget curl ccache
+
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ccache-premium-${{ hashFiles('Makefile', 'theettam/**') }}
+          restore-keys: ccache-premium-
+
+      - name: Clang r547379
+        run: |
+          rm -rf "$HOME/clang"
+          git clone --depth=1 https://gitlab.com/kei-space/clang/r547379 "$HOME/clang"
+          echo "$HOME/clang/bin" >> "$GITHUB_PATH"
+          export PATH="$HOME/clang/bin:$PATH"
+          clang --version | head -1
+
+      - name: Build premium + KABI gate
+        env:
+          THEETTAM_CLANG: ${{ runner.temp }}/../clang
+          JOBS: "4"
+          USE_CCACHE: "1"
+        run: |
+          export PATH="$HOME/clang/bin:$PATH"
+          export THEETTAM_CLANG="$HOME/clang"
+          export CCACHE_DIR="$HOME/.ccache"
+          which ccache && export CC="ccache clang" || true
+          bash theettam/scripts/build_premium_sukisu.sh
+
+      - name: Upload Image + KABI artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: theettam-premium-sukisu
+          path: |
+            dist/Image-premium-sukisu
+            dist/PREMIUM_KABI_REPORT.md
+            dist/kabi/**
+            logs/**
+          if-no-files-found: error
