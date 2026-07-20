@@ -1,4 +1,4 @@
-name: Theettam Premium — SukiSU+KPM+SUSFS+DroidSpaces (KABI gate)
+name: Theettam Premium CALLSAFE (SukiSU + DS no USER_NS)
 
 on:
   workflow_dispatch:
@@ -9,7 +9,7 @@ on:
       - 'scripts/susfs/**'
       - 'scripts/droidspaces/**'
       - 'kernel/sched/sched-pelt.h'
-      - 'theettam/configs/**'
+      - 'drivers/base/power/wakeup.c'
       - '.github/workflows/build-theettam-premium.yml'
 
 concurrency:
@@ -17,30 +17,30 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  premium-kabi:
-    name: Premium build + Module.symvers CRC gate
+  premium-callsafe:
+    name: CALLSAFE premium + KABI gate
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
       - uses: actions/checkout@v4
 
-      - name: Sanity — must be 6.1.175 base
+      - name: Sanity - must be 6.1.175 base
         run: |
           grep -q '^SUBLEVEL = 175' Makefile || { echo "::error::SUBLEVEL != 175"; exit 1; }
-          test -f docs/BOOT-NOTES.md || { echo "::error::BOOT-NOTES missing"; exit 1; }
-          echo "HEAD=$(git rev-parse --short HEAD) SUBLEVEL=175"
+          test -f scripts/droidspaces/droidspaces-callsafe.config
+          echo "HEAD=$(git rev-parse --short HEAD) CALLSAFE DS (no USER_NS)"
 
       - name: Install deps
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential flex bison libssl-dev libelf-dev bc cpio \
-            git python3 wget curl ccache pahole
+            git python3 wget curl ccache pahole zip unzip
 
-      - name: Cache ccache pahole
+      - name: Cache ccache
         uses: actions/cache@v4
         with:
           path: ~/.ccache
-          key: ccache-premium-${{ hashFiles('Makefile', 'theettam/**') }}
+          key: ccache-premium-callsafe-${{ hashFiles('Makefile', 'theettam/**', 'scripts/droidspaces/**') }}
           restore-keys: ccache-premium-
 
       - name: Clang r547379
@@ -51,11 +51,11 @@ jobs:
           export PATH="$HOME/clang/bin:$PATH"
           clang --version | head -1
 
-      - name: Build premium + KABI gate
+      - name: Build CALLSAFE premium + KABI gate
         env:
-          THEETTAM_CLANG: ${{ runner.temp }}/../clang
           JOBS: "4"
-          USE_CCACHE: "1"
+          SKIP_DROIDSPACES: "0"
+          PREMIUM_FULL_DS: "0"
         run: |
           export PATH="$HOME/clang/bin:$PATH"
           export THEETTAM_CLANG="$HOME/clang"
@@ -63,12 +63,68 @@ jobs:
           which ccache && export CC="ccache clang" || true
           bash theettam/scripts/build_premium_sukisu.sh
 
-      - name: Upload Image + KABI artifacts
+      - name: Package AnyKernel zip
+        run: |
+          set -euo pipefail
+          IMG=dist/Image-premium-sukisu
+          test -f "$IMG"
+          # Prefer in-repo AnyKernel if present
+          if [[ -d AnyKernel3 ]]; then
+            AK=AnyKernel3
+          elif [[ -d anykernel ]]; then
+            AK=anykernel
+          else
+            git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git ak3-tmp
+            AK=ak3-tmp
+            # minimal peridot-ish properties
+            cat > "$AK/anykernel.sh" <<'EOF'
+### AnyKernel3 Ramdisk Mod Script
+properties() { '
+kernel.string=Theettam-Premium-CALLSAFE-noUSERNS
+do.devicecheck=0
+do.modules=0
+do.systemless=0
+do.cleanup=1
+do.cleanuponabort=0
+device.name1=peridot
+'; }
+block=boot
+is_slot_device=auto
+ramdisk_compression=auto
+patch_vbmeta_flag=auto
+no_magisk_check=1
+. tools/ak3-core.sh
+if [ -L "/dev/block/bootdevice/by-name/init_boot_a" -o -L "/dev/block/by-name/init_boot_a" ]; then
+  split_boot
+  flash_boot
+else
+  dump_boot
+  write_boot
+fi
+EOF
+          fi
+          rm -f "$AK/Image" "$AK"/*.zip 2>/dev/null || true
+          cp -f "$IMG" "$AK/Image"
+          # stamp
+          VER=$(cat out-premium/include/config/kernel.release 2>/dev/null || echo "6.1.175")
+          SHA=$(git rev-parse --short HEAD)
+          ZIP="Theettam-Premium-CALLSAFE-noUSERNS-peridot-${VER}-${SHA}.zip"
+          (
+            cd "$AK"
+            zip -r9 "../dist/$ZIP" Image anykernel.sh META-INF tools LICENSE.txt 2>/dev/null \
+              || zip -r9 "../dist/$ZIP" Image anykernel.sh META-INF tools 2>/dev/null \
+              || zip -r9 "../dist/$ZIP" . -x '*.git*'
+          )
+          ls -la dist/
+          echo "ZIP=$ZIP" >> "$GITHUB_ENV"
+
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: theettam-premium-sukisu
+          name: theettam-premium-callsafe
           path: |
             dist/Image-premium-sukisu
+            dist/*.zip
             dist/PREMIUM_KABI_REPORT.md
             dist/kabi/**
             logs/**
