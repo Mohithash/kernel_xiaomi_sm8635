@@ -17,8 +17,32 @@ cp -v "$S4K_DIR"/kernel_patches/fs/*.c "$KROOT/fs/"
 cp -v "$S4K_DIR"/kernel_patches/include/linux/*.h "$KROOT/include/linux/"
 
 cd "$KROOT"
-# apply the FULL fs-side patch (namespace.c top-decl hunk expected to reject -> fixup below)
-patch -p1 --fuzz=3 < "$P50" || true
+# Pre-apply namespace top decls for 6.1.175 (blk.h after internal.h)
+python3 - <<'PYNS'
+f="fs/namespace.c"; s=open(f,encoding="utf-8",errors="replace").read()
+inc=("#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\n"
+     "#include <linux/susfs_def.h>\n"
+     "#endif // #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\n")
+ext=("#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\n"
+     "extern bool susfs_is_current_ksu_domain(void);\n"
+     "extern struct static_key_true susfs_is_sdcard_android_data_not_decrypted;\n"
+     "\n"
+     "#define CL_COPY_MNT_NS BIT(25) /* used by copy_mnt_ns() */\n"
+     "\n"
+     "#endif // #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\n")
+if "susfs_def.h" not in s:
+    s=s.replace("#include <linux/mnt_idmapping.h>\n","#include <linux/mnt_idmapping.h>\n\n"+inc,1)
+if "extern bool susfs_is_current_ksu_domain" not in s:
+    a='#include "internal.h"\n#include <trace/hooks/blk.h>\n'
+    b='#include "internal.h"\n'
+    if a in s:
+        s=s.replace(a,'#include "internal.h"\n'+ext+'#include <trace/hooks/blk.h>\n',1)
+    else:
+        s=s.replace(b,b+ext,1)
+open(f,"w",encoding="utf-8").write(s)
+print("  [+] namespace.c top decls pre-applied (native path)")
+PYNS
+patch -p1 --fuzz=3 -N < "$P50" || true
 
 # namespace.c susfs decl block (the one expected reject; idempotent)
 python3 - <<'PY'
@@ -31,7 +55,17 @@ ext=("#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\n"
 if "susfs_def.h" not in s:
     s=s.replace("#include <linux/mnt_idmapping.h>\n","#include <linux/mnt_idmapping.h>\n"+inc,1)
 if "extern bool susfs_is_current_ksu_domain" not in s:
-    s=s.replace('#include "internal.h"\n','#include "internal.h"\n'+ext,1)
+    a='#include "internal.h"
+#include <trace/hooks/blk.h>
+'
+    b='#include "internal.h"
+'
+    if a in s:
+        s=s.replace(a,'#include "internal.h"
+'+ext+'#include <trace/hooks/blk.h>
+',1)
+    else:
+        s=s.replace(b,b+ext,1)
 open(f,"w").write(s)
 print("  [+] namespace.c susfs decls applied")
 PY
