@@ -20,6 +20,10 @@ advertised CAKE and IPv6 NAT, neither of which is compiled in):
 3. **Credit the code you ship.** Chidori/GuidixX for the base, firelzrd for
    BORE/ADIOS, simonpunk for SUSFS, the root projects for their drivers.
 4. **Never announce an unbooted build.** Compile-verified is not boot-verified.
+5. **Shipping code is not a user feature.** PLB was listed here for two releases: the
+   code is present and correct, but it repaths flows across datacenter ECMP paths by
+   rewriting the IPv6 flow label. A phone has one path. It was true and meaningless —
+   ask what a claim does for the person reading it, not whether it compiles.
 
 ---
 
@@ -41,7 +45,7 @@ Updated: 17/07/'26
 • **Linux GKI 6.1.175** — first LTS bump past 6.1.173 for peridot, via a real 3-way merge of ACK `android14-6.1-lts` (1010 commits)
 • **KernelSU-Next v3.3.0 + SUSFS v2.2.0** — hand-authored port; this pairing does not exist upstream
 • **SukiSU Ultra + SUSFS v2.2.0** (with KPM) and **ReSukiSU + SUSFS v2.2.0**
-• **BBRv3 + PLB** congestion control
+• **BBRv3** congestion control (default)
 • **BORE** CPU scheduler — `sysctl kernel.sched_bore=0` to disable at runtime
 • **ADIOS** I/O scheduler (default)
 • **Stock uname** — reports a stock GKI version string, no custom kernel branding
