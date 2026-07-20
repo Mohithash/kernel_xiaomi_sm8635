@@ -231,9 +231,52 @@ print("  [+] wrote 50_ (weishu-only hunks + setresuid hunk removed)")
 PY
 
 cd "$KROOT"
-# namespace.c's top decl hunk is expected to reject (handled by the fixup below);
-# don't let set -e abort on patch's exit 1.
-patch -p1 --fuzz=3 < susfs50.trimmed.patch || true
+# --- 5b) PRE-apply namespace.c top decls for 6.1.175 (before patch)
+# On peridot-6.1.175, fs/namespace.c has #include <trace/hooks/blk.h> after
+# "internal.h", so the upstream 50_ hunk#1 (context without blk.h) rejects.
+# Apply the same decls the fixup would, BEFORE patch, so hunk#1 is a no-op
+# and remaining namespace hunks apply cleanly without "Hunk #1 FAILED".
+python3 - <<'PYNS'
+f = "fs/namespace.c"
+s = open(f, encoding="utf-8", errors="replace").read()
+inc = (
+    "#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\n"
+    "#include <linux/susfs_def.h>\n"
+    "#endif // #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\n"
+)
+ext = (
+    "#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\n"
+    "extern bool susfs_is_current_ksu_domain(void);\n"
+    "extern struct static_key_true susfs_is_sdcard_android_data_not_decrypted;\n"
+    "\n"
+    "#define CL_COPY_MNT_NS BIT(25) /* used by copy_mnt_ns() */\n"
+    "\n"
+    "#endif // #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\n"
+)
+changed = False
+if "susfs_def.h" not in s:
+    old = "#include <linux/mnt_idmapping.h>\n"
+    if old not in s:
+        raise SystemExit("mnt_idmapping.h include not found in namespace.c")
+    s = s.replace(old, old + "\n" + inc, 1)
+    changed = True
+if "extern bool susfs_is_current_ksu_domain" not in s:
+    # 6.1.175: internal.h then trace/hooks/blk.h
+    a = '#include "internal.h"\n#include <trace/hooks/blk.h>\n'
+    b = '#include "internal.h"\n'
+    if a in s:
+        s = s.replace(a, '#include "internal.h"\n' + ext + '#include <trace/hooks/blk.h>\n', 1)
+    elif b in s:
+        s = s.replace(b, b + ext, 1)
+    else:
+        raise SystemExit("internal.h include site not found")
+    changed = True
+open(f, "w", encoding="utf-8").write(s)
+print("  [+] namespace.c top decls pre-applied for 6.1.175" if changed else "  [=] namespace.c top decls already present")
+PYNS
+
+# Remaining 50_ hunks (namespace body etc.). -N skips already-applied top decls.
+patch -p1 --fuzz=3 -N < susfs50.trimmed.patch || true
 rm -f susfs50.trimmed.patch
 
 # --- 6) namespace.c decl fixup (the one expected reject) ---
