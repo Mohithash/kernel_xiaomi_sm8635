@@ -17,9 +17,19 @@ mkdir -p "$STAMP_DIR" dist logs
 
 log(){ echo "[$(date -u +%H:%M:%S)] $*"; }
 
-# Call/IMS isolation: DroidSpaces (USER_NS/PID_NS/SYSVIPC/...) is the main premium-only
-# surface vs Theettam 2.1 SukiSU. Default OFF until VoLTE confirmed. Set SKIP_DROIDSPACES=0 to enable.
-SKIP_DROIDSPACES="${SKIP_DROIDSPACES:-1}"
+# CALLSAFE test mode (default):
+#   DroidSpaces ON with official GKI set MINUS USER_NS (droidspaces-callsafe.config)
+#   No PELT tweak (stock LOAD_AVG) — applied in tree separately
+#   No qcom_rx wakelock block (already removed)
+# Set PREMIUM_FULL_DS=1 to use original droidspaces.config (includes USER_NS).
+# Set SKIP_DROIDSPACES=1 to match 2.1 SukiSU (no containers).
+SKIP_DROIDSPACES="${SKIP_DROIDSPACES:-0}"
+PREMIUM_FULL_DS="${PREMIUM_FULL_DS:-0}"
+if [[ "${PREMIUM_FULL_DS}" == "1" ]]; then
+  DROIDSPACES_CONFIG="${DROIDSPACES_CONFIG:-scripts/droidspaces/droidspaces.config}"
+else
+  DROIDSPACES_CONFIG="${DROIDSPACES_CONFIG:-scripts/droidspaces/droidspaces-callsafe.config}"
+fi
 
 # CI: disable BTF — runners often fail pahole/BTF on vmlinux
 disable_btf() {
@@ -49,8 +59,12 @@ if [[ "${SKIP_BASELINE:-0}" != "1" ]]; then
   make O="$OUT_BASE" olddefconfig
   # Match shipping v2.1-ish: BORE/ADIOS already in gki_defconfig
   make -j"$JOBS" O="$OUT_BASE" Image 2>&1 | tee logs/baseline_build.log
-  if [[ ! -f "$OUT_BASE/Module.symvers" && -f "$OUT_BASE/vmlinux.symvers" ]]; then cp -f "$OUT_BASE/vmlinux.symvers" "$OUT_BASE/Module.symvers"; fi
-test -f "$OUT_BASE/Module.symvers"
+  if [[ ! -f "$OUT_BASE/Module.symvers" && -f "$OUT_BASE/vmlinux.symvers" ]]; then
+    cp -f "$OUT_BASE/vmlinux.symvers" "$OUT_BASE/Module.symvers"
+  fi
+  if [[ ! -f "$OUT_BASE/Module.symvers" && -f "$OUT_BASE/Module.symvers" ]]; then true; fi
+  test -f "$OUT_BASE/Module.symvers" || test -f "$OUT_BASE/vmlinux.symvers"
+  if [[ ! -f "$OUT_BASE/Module.symvers" ]]; then cp -f "$OUT_BASE/vmlinux.symvers" "$OUT_BASE/Module.symvers"; fi
   cp -f "$OUT_BASE/Module.symvers" "$STAMP_DIR/Module.symvers.baseline"
   log "baseline symvers saved"
 fi
@@ -79,7 +93,7 @@ bash scripts/susfs/integrate-sukisu.sh "$PWD/KernelSU" "$PWD/susfs4ksu" "$PWD"
 if [[ "${SKIP_DROIDSPACES:-1}" == "1" ]]; then
   log "=== DroidSpaces SKIPPED (call/IMS isolation; match 2.1 SukiSU) ==="
 else
-  log "=== DroidSpaces integrate.sh (task_struct reserve) ==="
+  log "=== DroidSpaces integrate.sh (task_struct reserve) config=$DROIDSPACES_CONFIG ==="
   bash scripts/droidspaces/integrate.sh
 fi
 
@@ -116,7 +130,7 @@ if [[ "${SKIP_DROIDSPACES:-1}" != "1" ]]; then
   while read -r opt; do
     [[ -z "$opt" || "$opt" =~ ^# ]] && continue
     ./scripts/config --file "$OUT/.config" --enable "CONFIG_$opt" || true
-  done < scripts/droidspaces/droidspaces.config
+  done < "$DROIDSPACES_CONFIG"
 else
   log "DroidSpaces config fragment skipped"
 fi
@@ -154,6 +168,10 @@ grep -q '^CONFIG_KPM=y' "$OUT/.config" || echo "::warning::CONFIG_KPM not set"
 log "=== PREMIUM build ==="
 make -j"$JOBS" O="$OUT" Image 2>&1 | tee logs/premium_build.log
 test -f "$OUT/arch/arm64/boot/Image"
+# Image-only builds often only emit vmlinux.symvers
+if [[ ! -f "$OUT/Module.symvers" && -f "$OUT/vmlinux.symvers" ]]; then
+  cp -f "$OUT/vmlinux.symvers" "$OUT/Module.symvers"
+fi
 test -f "$OUT/Module.symvers"
 cp -f "$OUT/Module.symvers" "$STAMP_DIR/Module.symvers.premium"
 
@@ -175,6 +193,8 @@ cat > dist/PREMIUM_KABI_REPORT.md <<EOF
 - Premium symvers: Module.symvers.premium
 - Gate: PASS (see Module.symvers.diff.txt)
 - Pins: SukiSU $SUKISU_PIN SUSFS $SUSFS_PIN
+- DroidSpaces: SKIP=${SKIP_DROIDSPACES} config=${DROIDSPACES_CONFIG:-none} FULL_DS=${PREMIUM_FULL_DS}
 - Forbidden configs forced off: CGROUP_PIDS CGROUP_DEVICE NF_TABLES BRIDGE_NETFILTER
+- CALLSAFE: no USER_NS (unless PREMIUM_FULL_DS=1)
 EOF
 log "DONE Image at dist/Image-premium-sukisu"
