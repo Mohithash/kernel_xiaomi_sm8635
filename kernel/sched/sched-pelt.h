@@ -7,5 +7,5 @@ static const u32 runnable_avg_yN_inv[] __maybe_unused = {
 	0x9837f050, 0x91c3d373, 0x8b95c1e3, 0x85aac367,
 };
 
-#define LOAD_AVG_PERIOD 8	/* Theettam: 8ms PELT half-life */
-#define LOAD_AVG_MAX 17249	/* paired with PERIOD 8 */
+#define LOAD_AVG_PERIOD 16
+#define LOAD_AVG_MAX 24130
