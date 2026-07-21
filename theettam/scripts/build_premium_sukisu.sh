@@ -143,8 +143,12 @@ for o in CGROUP_PIDS CGROUP_DEVICE NF_TABLES BRIDGE_NETFILTER NETFILTER_XT_MATCH
   ./scripts/config --file "$OUT/.config" --disable "CONFIG_$o" || true
 done
 make O="$OUT" olddefconfig
-disable_btf "$OUT/.config"
-make O="$OUT" olddefconfig
+# NOTE: CONFIG_DEBUG_INFO_BTF stays ENABLED for the shipped premium Image.
+# GKI/Android requires /sys/kernel/btf/vmlinux for the userspace bpfloader to
+# load the CO-RE eBPF programs netd/IMS depend on; disabling it breaks mobile
+# data and VoLTE ("calls don't work"). BTF is NOT part of the genksyms/KMI CRC
+# gate (symvers CRCs come from source, not BTF), so keeping it on costs nothing
+# for boot-safety. (Was: disable_btf "$OUT/.config" — removed, it broke calls.)
 
 # Sanity forbidden off
 for o in CGROUP_PIDS CGROUP_DEVICE NF_TABLES BRIDGE_NETFILTER; do
@@ -159,7 +163,13 @@ if [[ "${SKIP_DROIDSPACES:-1}" != "1" ]]; then
 fi
 grep -q '^CONFIG_KSU=y' "$OUT/.config" || { echo "::error::CONFIG_KSU not enabled — SukiSU will not work"; exit 1; }
 grep -E '^CONFIG_KSU_SUSFS' "$OUT/.config" | head -5 || echo "::warning::no KSU_SUSFS options"
-grep -q '^CONFIG_KPM=y' "$OUT/.config" || echo "::warning::CONFIG_KPM not set"
+# KPM must be REAL, not a note buried in logs. If SukiSU's `config KPM` didn't
+# survive olddefconfig, the zip would ship without KPM (the exact 2.1 bug).
+# Fail loud, same as KSU above.
+grep -qE '^\s*config KPM\s*$' drivers/kernelsu/Kconfig \
+  || { echo "::error::SukiSU 'config KPM' symbol not found in sourced Kconfig — KPM cannot enable"; exit 1; }
+grep -q '^CONFIG_KPM=y' "$OUT/.config" \
+  || { echo "::error::CONFIG_KPM not set after olddefconfig — KPM would be MISSING from the zip"; exit 1; }
 
 
 ############################################
