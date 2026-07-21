@@ -7,9 +7,11 @@ name: Theettam 2.0 — 4 root flavors on 6.1.175
 #
 #   ksun-plain      KernelSU-Next v3.3.0, no SUSFS
 #   ksun-susfs      KernelSU-Next v3.3.0 + SUSFS v2.2.0   (hand-port, scripts/susfs/integrate.sh)
-#   sukisu-susfs    SukiSU-Ultra + SUSFS v2.2.0 + KPM     (same graft; shares weishu new-tree kprobe arch)
+#   sukisu-susfs    SukiSU-Ultra + SUSFS v2.2.0           (same graft; shares weishu new-tree kprobe arch)
 #   resukisu-susfs  ReSukiSU + SUSFS v2.2.0               (native driver side; fs-side only)
-#   premium         SukiSU-Ultra + SUSFS + KPM + DroidSpaces (all-in-one; BTF on)
+#   premium         SukiSU-Ultra + SUSFS + DroidSpaces    (all-in-one; BTF on)
+# Note: KPM is NOT offered — every current SukiSU-Ultra branch/release ships KPM
+# as non-functional stubs, so advertising it would mislead. Do not re-add it.
 
 on:
   workflow_dispatch:
@@ -54,14 +56,14 @@ jobs:
             kpm: 'false'
             zipname: KSUN3.3.0-SUSFS2.2.0
           - id: sukisu-susfs
-            label: SukiSU-Ultra + SUSFS v2.2.0 (KPM)
+            label: SukiSU-Ultra + SUSFS v2.2.0
             repo: https://github.com/SukiSU-Ultra/SukiSU-Ultra
             clone_args: -b susfs_new
             pin: 278d822a4ebd214bcfd774b7910cb11cdc560bb9
             susfs: shim
             script: integrate-sukisu.sh
-            kpm: 'true'
-            zipname: SukiSU-Ultra-SUSFS2.2.0-KPM
+            kpm: 'false'
+            zipname: SukiSU-Ultra-SUSFS2.2.0
           - id: ksun-susfs-droidspaces
             label: KernelSU-Next + SUSFS + DroidSpaces (experimental)
             repo: https://github.com/KernelSU-Next/KernelSU-Next
@@ -81,19 +83,19 @@ jobs:
             kpm: 'false'
             zipname: ReSukiSU-SUSFS2.2.0
           # 6th flavor: everything in one Image — SukiSU-Ultra root (same pin as
-          # sukisu-susfs) + KPM + SUSFS v2.2.0 + DroidSpaces containers. Built the
-          # same way as the flavors that boot on device (BTF stays on -> VoLTE
-          # works; KPM hard-verified below; SYSVIPC relocated into KABI reserve).
+          # sukisu-susfs) + SUSFS v2.2.0 + DroidSpaces containers. Built the same
+          # way as the flavors that boot on device (BTF stays on -> VoLTE works;
+          # SYSVIPC relocated into KABI reserve).
           - id: premium
-            label: SukiSU-Ultra + SUSFS + KPM + DroidSpaces (premium)
+            label: SukiSU-Ultra + SUSFS + DroidSpaces (premium)
             repo: https://github.com/SukiSU-Ultra/SukiSU-Ultra
             clone_args: -b susfs_new
             pin: 278d822a4ebd214bcfd774b7910cb11cdc560bb9
             susfs: shim
             script: integrate-sukisu.sh
             droidspaces: 'true'
-            kpm: 'true'
-            zipname: Theettam-Premium-SukiSU-SUSFS-KPM-DroidSpaces
+            kpm: 'false'
+            zipname: Theettam-Premium-SukiSU-SUSFS-DroidSpaces
 
     name: ${{ matrix.label }}
     steps:

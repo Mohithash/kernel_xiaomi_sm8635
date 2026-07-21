@@ -23,13 +23,13 @@ Four root flavors. Pick the exact root + hiding stack you want.
 
 <div align="center">
 
-| Build | Root engine | SUSFS | KPM | Manager | Best for |
-|:--|:--|:-:|:-:|:--|:--|
-| **KSUN** | KernelSU-Next v3.3.0 | — | — | KernelSU-Next | Lightweight root, no kernel-side hiding |
-| **KSUN + SUSFS** ⭐ | KernelSU-Next v3.3.0 | `v2.2.0` | — | KernelSU-Next | Root **+ full hiding** — start here |
-| **SukiSU-Ultra + SUSFS** | SukiSU-Ultra | `v2.2.0` | ✅ | SukiSU | Root + hiding **+ Kernel Patch Modules** |
-| **ReSukiSU + SUSFS** | ReSukiSU | `v2.2.0` *(native)* | — | ReSukiSU | Root + hiding, **cleanest integration** |
-| **KSUN + SUSFS + DroidSpaces** 🧪 | KernelSU-Next v3.3.0 | `v2.2.0` | — | KernelSU-Next | **Experimental** — LXC containers. [Separate release ↓](../../releases/tag/droidspaces-v1) |
+| Build | Root engine | SUSFS | Manager | Best for |
+|:--|:--|:-:|:--|:--|
+| **KSUN** | KernelSU-Next v3.3.0 | — | KernelSU-Next | Lightweight root, no kernel-side hiding |
+| **KSUN + SUSFS** ⭐ | KernelSU-Next v3.3.0 | `v2.2.0` | KernelSU-Next | Root **+ full hiding** — start here |
+| **SukiSU-Ultra + SUSFS** | SukiSU-Ultra | `v2.2.0` | SukiSU-Ultra | Root + hiding, SukiSU-Ultra ecosystem |
+| **ReSukiSU + SUSFS** | ReSukiSU | `v2.2.0` *(native)* | ReSukiSU | Root + hiding, **cleanest integration** |
+| **KSUN + SUSFS + DroidSpaces** 🧪 | KernelSU-Next v3.3.0 | `v2.2.0` | KernelSU-Next | **Experimental** — LXC containers. [Separate release ↓](../../releases/tag/droidspaces-v1) |
 
 ### **[⬇  Download latest](../../releases/latest)**   ·   **[🧪 DroidSpaces (experimental) →](../../releases/tag/droidspaces-v1)**
 
@@ -204,7 +204,7 @@ mounting.
    | Your zip | Install only this manager |
    |:--|:--|
    | `KSUN3.3.0` · `KSUN3.3.0-SUSFS2.2.0` | **KernelSU-Next** |
-   | `SukiSU-Ultra-SUSFS2.2.0-KPM` | **SukiSU** |
+   | `SukiSU-Ultra-SUSFS2.2.0` | **SukiSU-Ultra** |
    | `ReSukiSU-SUSFS2.2.0` | **ReSukiSU** |
 
 2. **Reboot.** The manager is crowned during boot, so uninstalling one only takes effect after a restart.

@@ -11,7 +11,7 @@ The boot-confirmed base is **`peridot-6.1.175`** (SUBLEVEL **175**, GKI
 builds** these flavors, boot-tested:
 
 - KernelSU-Next v3.3.0 (+ SUSFS v2.2.0)
-- **SukiSU-Ultra + SUSFS v2.2.0 + KPM**
+- **SukiSU-Ultra + SUSFS v2.2.0**
 - ReSukiSU + SUSFS v2.2.0
 - **KSUN + SUSFS + DroidSpaces** (LXC containers)
 
