@@ -1,0 +1,124 @@
+name: Theettam APatch (KernelPatch — real KPM)
+
+# Standalone flavor: root via APatch / KernelPatch, which provides REAL Kernel
+# Patch Modules (.kpm) — unlike SukiSU-Ultra, whose KPM is stubbed on every
+# branch. KernelPatch works differently from KSU/SukiSU: it does NOT patch the
+# kernel source. It patches the COMPILED Image with kptools+kpimg after the
+# build, so it is inherently KABI-safe (no struct/CRC changes, stock vendor_dlkm
+# keeps loading). This flavor is therefore separate from the KSU matrix.
+#
+# Root manager: APatch app (bmax121/APatch). Not KernelSU/SukiSU. No SUSFS
+# (that is a KSU-side patch); APatch has its own hiding.
+
+on:
+  workflow_dispatch:
+    inputs:
+      superkey:
+        description: "APatch superkey — CHANGE IT in the APatch manager after first boot"
+        required: false
+        default: "theettam-change-me"
+  push:
+    branches: [ peridot-6.1.175 ]
+    paths: [ '.github/workflows/build-apatch.yml' ]
+
+concurrency:
+  group: apatch-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  KP_VERSION: "0.13.2"          # bmax121/KernelPatch — supports Linux 3.18-6.6 arm64
+  KBUILD_BUILD_USER: build
+  KBUILD_BUILD_HOST: localhost
+
+jobs:
+  build:
+    name: APatch (KernelPatch KPM)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: peridot-6.1.175
+          fetch-depth: 1
+
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends bc bison flex build-essential \
+            libssl-dev libncurses-dev libelf-dev zlib1g-dev pkg-config git curl zip cpio \
+            kmod python3 ccache lld llvm dwarves
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ccache-apatch-${{ github.sha }}
+          restore-keys: |
+            ccache-apatch-
+            ccache-peridot175-
+      - id: clang
+        uses: actions/cache@v4
+        with:
+          path: ~/clang
+          key: clang-kei-r547379
+      - if: steps.clang.outputs.cache-hit != 'true'
+        run: rm -rf "$HOME/clang"; git clone --depth=1 https://gitlab.com/kei-space/clang/r547379 "$HOME/clang"
+      - run: echo "$HOME/clang/bin" >> "$GITHUB_PATH"
+
+      - name: Sanity — base must be 6.1.175
+        run: |
+          grep -q '^SUBLEVEL = 175' Makefile || { echo "::error::base is not 6.1.175"; exit 1; }
+          echo "✅ base 6.1.175"
+
+      - name: Build clean Image (no KSU/SukiSU — APatch is the root)
+        run: |
+          set -euo pipefail
+          export ARCH=arm64 SUBARCH=arm64 PATH="$HOME/clang/bin:$PATH"
+          make -j"$(nproc --all)" O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 gki_defconfig
+          # No root source integration. BTF stays on (VoLTE/netd), BORE+ADIOS are
+          # already in gki_defconfig. KernelPatch is applied to the built Image below.
+          grep -q '^CONFIG_DEBUG_INFO_BTF=y' out/.config || { echo "::error::BTF off — would break calls"; exit 1; }
+          export KBUILD_COMPILER_STRING="$(clang --version | head -n1)"
+          make -j"$(nproc --all)" O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CC="ccache clang" Image 2>&1 | tee build.log
+          test -f out/arch/arm64/boot/Image
+
+      - name: Patch Image with KernelPatch (real KPM engine)
+        run: |
+          set -euo pipefail
+          SKEY="${{ github.event.inputs.superkey || 'theettam-change-me' }}"
+          curl -fsSLo kptools "https://github.com/bmax121/KernelPatch/releases/download/${KP_VERSION}/kptools-linux"
+          curl -fsSLo kpimg   "https://github.com/bmax121/KernelPatch/releases/download/${KP_VERSION}/kpimg-android"
+          chmod +x kptools
+          echo "=== kpimg version ==="; ./kptools -v -k kpimg || true
+          # -p patch, -i input Image, -k kpimg, -s superkey (baked in), -o output
+          ./kptools -p -i out/arch/arm64/boot/Image -k kpimg -s "$SKEY" -o Image.apatch
+          test -f Image.apatch
+          echo "=== patch info on patched Image (must list KernelPatch) ==="
+          ./kptools -l -i Image.apatch | tee kp-list.txt
+          grep -qiE 'superkey|kernelpatch|version' kp-list.txt || { echo "::error::KernelPatch patch not detected in output Image"; exit 1; }
+          echo "✅ KernelPatch ${KP_VERSION} applied"
+
+      - name: Package flashable zip
+        run: |
+          set -euo pipefail
+          rm -rf AnyKernel3; cp -r anykernel AnyKernel3; cp Image.apatch AnyKernel3/Image
+          VER="$(cat out/include/config/kernel.release 2>/dev/null || echo 6.1.175)"
+          ZIP="Theettam-APatch-KernelPatch${KP_VERSION}-peridot-${VER}.zip"
+          ( cd AnyKernel3 && zip -r9 "../$ZIP" . -x '.git*' )
+          echo "ZIP=$ZIP" >> "$GITHUB_ENV"
+          echo "✅ $ZIP ($(stat -c%s "$ZIP") bytes)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zip-apatch
+          path: ${{ env.ZIP }}
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: log-apatch
+          path: |
+            build.log
+            kp-list.txt
+          if-no-files-found: ignore
