@@ -179,7 +179,13 @@ jobs:
           make -j"$(nproc --all)" O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 gki_defconfig
           C=./scripts/config
           $C --file out/.config -e KSU
-          if [ "${{ matrix.kpm }}" = "true" ]; then $C --file out/.config -e KPM || true; fi
+          if [ "${{ matrix.kpm }}" = "true" ]; then
+            # KPM must be a REAL Kconfig symbol (SukiSU sources 'config KPM'), else
+            # -e writes it and olddefconfig silently drops it -> KPM-less zip.
+            grep -rqE "^\s*config KPM\s*$" --include=Kconfig . \
+              || { echo "::error::CONFIG_KPM is not a Kconfig symbol in this tree (SukiSU KPM not sourced)"; exit 1; }
+            $C --file out/.config -e KPM
+          fi
           if [ "${{ matrix.susfs }}" != "none" ]; then
             for o in KSU_SUSFS KSU_SUSFS_SUS_PATH KSU_SUSFS_SUS_MOUNT KSU_SUSFS_SUS_KSTAT \
                      KSU_SUSFS_SPOOF_UNAME KSU_SUSFS_ENABLE_LOG KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS \
@@ -204,7 +210,7 @@ jobs:
             grep -E '^CONFIG_KSU_SUSFS.*=y' out/.config | tee /tmp/susfscfg
             test -s /tmp/susfscfg || { echo "::error::SUSFS not enabled in .config"; exit 1; }
           fi
-          if [ "${{ matrix.kpm }}" = "true" ]; then grep -E '^CONFIG_KPM=y' out/.config || echo "note: KPM not enabled"; fi
+          if [ "${{ matrix.kpm }}" = "true" ]; then grep -E '^CONFIG_KPM=y' out/.config || { echo "::error::KPM flavor but CONFIG_KPM=y dropped in olddefconfig — zip would ship without KPM"; exit 1; }; fi
           if [ "${{ matrix.droidspaces }}" = "true" ]; then
             miss=0
             for o in $(grep -v '^#' scripts/droidspaces/droidspaces.config); do
