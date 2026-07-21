@@ -21,14 +21,20 @@ log(){ echo "[$(date -u +%H:%M:%S)] $*"; }
 #   DroidSpaces ON with official GKI set MINUS USER_NS (droidspaces-callsafe.config)
 #   No PELT tweak (stock LOAD_AVG) — applied in tree separately
 #   No qcom_rx wakelock block (already removed)
-# Set PREMIUM_FULL_DS=1 to use original droidspaces.config (includes USER_NS).
-# Set SKIP_DROIDSPACES=1 to match 2.1 SukiSU (no containers).
+# DroidSpaces profile: premium defaults to the FULL config (droidspaces.config,
+# with USER_NS) — the exact set droidspaces-v1 shipped, which BOOTED with
+# containers working on-device. The "callsafe" (USER_NS-stripped) profile only
+# existed to bisect the broken-calls bug, which turned out to be
+# CONFIG_DEBUG_INFO_BTF (fixed above), NOT USER_NS. So there is no calls reason
+# to strip USER_NS anymore, and stripping it breaks rootless Docker/LXC — the
+# whole point of DroidSpaces. Set CALLSAFE=1 to force the stripped profile;
+# SKIP_DROIDSPACES=1 to build SukiSU-only (no containers). (PREMIUM_FULL_DS is
+# no longer used — full is the default; use CALLSAFE=1 for the stripped profile.)
 SKIP_DROIDSPACES="${SKIP_DROIDSPACES:-0}"
-PREMIUM_FULL_DS="${PREMIUM_FULL_DS:-0}"
-if [[ "${PREMIUM_FULL_DS}" == "1" ]]; then
-  DROIDSPACES_CONFIG="${DROIDSPACES_CONFIG:-scripts/droidspaces/droidspaces.config}"
-else
+if [[ "${CALLSAFE:-0}" == "1" ]]; then
   DROIDSPACES_CONFIG="${DROIDSPACES_CONFIG:-scripts/droidspaces/droidspaces-callsafe.config}"
+else
+  DROIDSPACES_CONFIG="${DROIDSPACES_CONFIG:-scripts/droidspaces/droidspaces.config}"
 fi
 
 # CI: disable BTF — runners often fail pahole/BTF on vmlinux
@@ -203,8 +209,8 @@ cat > dist/PREMIUM_KABI_REPORT.md <<EOF
 - Premium symvers: Module.symvers.premium
 - Gate: PASS (see Module.symvers.diff.txt)
 - Pins: SukiSU $SUKISU_PIN SUSFS $SUSFS_PIN
-- DroidSpaces: SKIP=${SKIP_DROIDSPACES} config=${DROIDSPACES_CONFIG:-none} FULL_DS=${PREMIUM_FULL_DS}
+- DroidSpaces: SKIP=${SKIP_DROIDSPACES} config=${DROIDSPACES_CONFIG:-none} CALLSAFE=${CALLSAFE:-0}
 - Forbidden configs forced off: CGROUP_PIDS CGROUP_DEVICE NF_TABLES BRIDGE_NETFILTER
-- CALLSAFE: no USER_NS (unless PREMIUM_FULL_DS=1)
+- Profile: FULL DroidSpaces (USER_NS on) unless CALLSAFE=1
 EOF
 log "DONE Image at dist/Image-premium-sukisu"
