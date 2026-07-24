@@ -10,6 +10,7 @@ name: Theettam 2.0 — 4 root flavors on 6.1.175
 #   sukisu-susfs    SukiSU-Ultra + SUSFS v2.2.0           (same graft; shares weishu new-tree kprobe arch)
 #   resukisu-susfs  ReSukiSU + SUSFS v2.2.0               (native driver side; fs-side only)
 #   premium         SukiSU-Ultra + SUSFS + DroidSpaces    (all-in-one; BTF on)
+#   apatch          APatch / KernelPatch — real KPM       (clean Image patched post-build)
 # Note: KPM is NOT offered — every current SukiSU-Ultra branch/release ships KPM
 # as non-functional stubs, so advertising it would mislead. Do not re-add it.
 
@@ -96,6 +97,17 @@ jobs:
             droidspaces: 'true'
             kpm: 'false'
             zipname: Theettam-Premium-SukiSU-SUSFS-DroidSpaces
+          # 7th flavor: APatch / KernelPatch — the real .kpm engine (SukiSU KPM is
+          # stubbed upstream). No KSU/SUSFS source integration: build a clean Image,
+          # then patch it post-build with kptools+kpimg (KABI-safe — the Image is
+          # patched, not the source). Root manager is the APatch app; superkey baked
+          # as theettam-change-me (change it in the app after first boot).
+          - id: apatch
+            label: APatch (KernelPatch — real KPM)
+            apatch: 'true'
+            susfs: none
+            kpm: 'false'
+            zipname: APatch-KernelPatch0.13.2
 
     name: ${{ matrix.label }}
     steps:
@@ -142,6 +154,7 @@ jobs:
           echo "✅ base 6.1.175 + BORE + ADIOS"
 
       - name: Fetch root driver (${{ matrix.id }})
+        if: matrix.apatch != 'true'
         run: |
           set -euo pipefail
           git clone ${{ matrix.clone_args }} "${{ matrix.repo }}" KernelSU
@@ -173,6 +186,7 @@ jobs:
           [ "$V" = "v2.2.0" ] || { echo "::error::expected SUSFS v2.2.0, got $V"; exit 1; }
 
       - name: Wire driver into the kernel tree
+        if: matrix.apatch != 'true'
         run: |
           set -euo pipefail
           ln -sf ../KernelSU/kernel drivers/kernelsu
@@ -215,7 +229,8 @@ jobs:
           export ARCH=arm64 SUBARCH=arm64 PATH="$HOME/clang/bin:$PATH"
           make -j"$(nproc --all)" O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 gki_defconfig
           C=./scripts/config
-          $C --file out/.config -e KSU
+          # APatch flavor: no in-source root — clean Image, patched post-build with kptools.
+          if [ "${{ matrix.apatch }}" != "true" ]; then $C --file out/.config -e KSU; fi
           if [ "${{ matrix.kpm }}" = "true" ]; then
             # KPM must be a REAL Kconfig symbol (SukiSU sources 'config KPM'), else
             # -e writes it and olddefconfig silently drops it -> KPM-less zip.
@@ -240,7 +255,7 @@ jobs:
           make -j"$(nproc --all)" O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 olddefconfig
 
           echo "=== config verification ==="
-          grep -E '^CONFIG_KSU=y' out/.config || { echo "::error::KSU not enabled"; exit 1; }
+          if [ "${{ matrix.apatch }}" != "true" ]; then grep -E '^CONFIG_KSU=y' out/.config || { echo "::error::KSU not enabled"; exit 1; }; fi
           grep -E '^CONFIG_SCHED_BORE=y' out/.config || { echo "::error::BORE not enabled"; exit 1; }
           grep -E '^CONFIG_MQ_IOSCHED_ADIOS=y' out/.config || { echo "::error::ADIOS not enabled"; exit 1; }
           # Track A memory tuning — must survive olddefconfig (DAMON_RECLAIM/LRU_SORT need DAMON_PADDR)
@@ -266,13 +281,29 @@ jobs:
           export KBUILD_COMPILER_STRING="$(clang --version | head -n1)"
           make -j"$(nproc --all)" O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CC="ccache clang" 2>&1 | tee build.log
 
+      - name: Patch Image with KernelPatch (APatch flavor)
+        if: matrix.apatch == 'true'
+        run: |
+          set -euo pipefail
+          KP=0.13.2
+          curl -fsSLo kptools "https://github.com/bmax121/KernelPatch/releases/download/${KP}/kptools-linux"
+          curl -fsSLo kpimg   "https://github.com/bmax121/KernelPatch/releases/download/${KP}/kpimg-android"
+          chmod +x kptools
+          # Patch the compiled Image in place (out -> temp -> move back) so the
+          # packaging step below picks up the patched Image unchanged. KABI-safe.
+          ./kptools -p -i out/arch/arm64/boot/Image -k kpimg -s theettam-change-me -o out/arch/arm64/boot/Image.kp
+          mv -f out/arch/arm64/boot/Image.kp out/arch/arm64/boot/Image
+          ./kptools -l -i out/arch/arm64/boot/Image | tee kp-list.txt
+          grep -qiE 'superkey|kernelpatch' kp-list.txt || { echo "::error::KernelPatch not applied"; exit 1; }
+          echo "✅ KernelPatch ${KP} applied (superkey theettam-change-me — change it in the APatch app)"
+
       - name: Package flashable zip
         run: |
           set -euo pipefail
           IMG=out/arch/arm64/boot/Image; [ -f "$IMG" ] || { echo "::error::no Image"; exit 1; }
           rm -rf AnyKernel3; cp -r anykernel AnyKernel3; cp "$IMG" AnyKernel3/Image
           VER="$(cat out/include/config/kernel.release 2>/dev/null || echo 6.1.175)"
-          ZIP="Theettam-2.0-${{ matrix.zipname }}-peridot-${VER}.zip"
+          ZIP="Theettam-2.5-${{ matrix.zipname }}-peridot-${VER}.zip"
           ( cd AnyKernel3 && zip -r9 "../$ZIP" . -x '.git*' )
           echo "ZIP=$ZIP" >> "$GITHUB_ENV"
           echo "KREL=$VER" >> "$GITHUB_ENV"

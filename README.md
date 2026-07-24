@@ -23,15 +23,19 @@ Four root flavors. Pick the exact root + hiding stack you want.
 
 <div align="center">
 
-| Build | Root engine | SUSFS | Manager | Best for |
-|:--|:--|:-:|:--|:--|
-| **KSUN** | KernelSU-Next v3.3.0 | — | KernelSU-Next | Lightweight root, no kernel-side hiding |
-| **KSUN + SUSFS** ⭐ | KernelSU-Next v3.3.0 | `v2.2.0` | KernelSU-Next | Root **+ full hiding** — start here |
-| **SukiSU-Ultra + SUSFS** | SukiSU-Ultra | `v2.2.0` | SukiSU-Ultra | Root + hiding, SukiSU-Ultra ecosystem |
-| **ReSukiSU + SUSFS** | ReSukiSU | `v2.2.0` *(native)* | ReSukiSU | Root + hiding, **cleanest integration** |
-| **KSUN + SUSFS + DroidSpaces** 🧪 | KernelSU-Next v3.3.0 | `v2.2.0` | KernelSU-Next | **Experimental** — LXC containers. [Separate release ↓](../../releases/tag/droidspaces-v1) |
+| Build | Root engine | SUSFS | KPM | Manager | Best for |
+|:--|:--|:-:|:-:|:--|:--|
+| **KSUN** | KernelSU-Next v3.3.0 | — | — | KernelSU-Next | Lightweight root, no kernel-side hiding |
+| **KSUN + SUSFS** ⭐ | KernelSU-Next v3.3.0 | `v2.2.0` | — | KernelSU-Next | Root **+ full hiding** — start here |
+| **SukiSU-Ultra + SUSFS** | SukiSU-Ultra | `v2.2.0` | — | SukiSU-Ultra | Root + hiding, SukiSU-Ultra ecosystem |
+| **ReSukiSU + SUSFS** | ReSukiSU | `v2.2.0` *(native)* | — | ReSukiSU | Root + hiding, **cleanest integration** |
+| **Premium** | SukiSU-Ultra | `v2.2.0` | — | SukiSU-Ultra | All-in-one: SukiSU + SUSFS + **DroidSpaces** containers |
+| **APatch** 🧪 | APatch / KernelPatch | — | ✅ **real** | APatch | The **only** flavor with working Kernel Patch Modules (`.kpm`) |
+| **KSUN + DroidSpaces** 🧪 | KernelSU-Next v3.3.0 | `v2.2.0` | — | KernelSU-Next | **Experimental** — LXC containers |
 
-### **[⬇  Download latest](../../releases/latest)**   ·   **[🧪 DroidSpaces (experimental) →](../../releases/tag/droidspaces-v1)**
+<sub>KPM: SukiSU-Ultra's is stubbed upstream on GKI, so real `.kpm` support comes only from APatch/KernelPatch. APatch uses its own manager app + superkey (baked as <code>theettam-change-me</code> — change it after first boot).</sub>
+
+### **[⬇  Download latest](../../releases/latest)**
 
 </div>
 
@@ -203,9 +207,10 @@ mounting.
 
    | Your zip | Install only this manager |
    |:--|:--|
-   | `KSUN3.3.0` · `KSUN3.3.0-SUSFS2.2.0` | **KernelSU-Next** |
-   | `SukiSU-Ultra-SUSFS2.2.0` | **SukiSU-Ultra** |
+   | `KSUN3.3.0` · `KSUN3.3.0-SUSFS2.2.0` · `…DroidSpaces…` | **KernelSU-Next** |
+   | `SukiSU-Ultra-SUSFS2.2.0` · `Premium-SukiSU-SUSFS-DroidSpaces` | **SukiSU-Ultra** |
    | `ReSukiSU-SUSFS2.2.0` | **ReSukiSU** |
+   | `APatch-KernelPatch…` | **APatch** |
 
 2. **Reboot.** The manager is crowned during boot, so uninstalling one only takes effect after a restart.
 3. **Reflash your flavor's zip** — [2.0.1](../../releases/tag/v2.0.1) or [2.0](../../releases/tag/v2.0) —
