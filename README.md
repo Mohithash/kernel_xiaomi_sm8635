@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/banner.svg" alt="Theettam Kernel — peridot — GKI 6.1.175" width="100%">
+<img src="assets/mbappu-banner.svg" alt="Theettam Kernel — Mbappu Edition — peridot — GKI 6.1.175" width="100%">
 
 <br>
 
