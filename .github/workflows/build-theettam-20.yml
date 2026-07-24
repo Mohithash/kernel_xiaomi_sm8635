@@ -303,7 +303,7 @@ jobs:
           IMG=out/arch/arm64/boot/Image; [ -f "$IMG" ] || { echo "::error::no Image"; exit 1; }
           rm -rf AnyKernel3; cp -r anykernel AnyKernel3; cp "$IMG" AnyKernel3/Image
           VER="$(cat out/include/config/kernel.release 2>/dev/null || echo 6.1.175)"
-          ZIP="Theettam-2.5-${{ matrix.zipname }}-peridot-${VER}.zip"
+          ZIP="Theettam-2.4-${{ matrix.zipname }}-peridot-${VER}.zip"
           ( cd AnyKernel3 && zip -r9 "../$ZIP" . -x '.git*' )
           echo "ZIP=$ZIP" >> "$GITHUB_ENV"
           echo "KREL=$VER" >> "$GITHUB_ENV"
