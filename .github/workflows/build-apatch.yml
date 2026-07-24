@@ -48,7 +48,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends bc bison flex build-essential \
             libssl-dev libncurses-dev libelf-dev zlib1g-dev pkg-config git curl zip cpio \
-            kmod python3 ccache lld llvm dwarves
+            kmod python3 ccache lld llvm dwarves zstd
 
       - uses: actions/cache@v4
         with:
@@ -61,10 +61,19 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/clang
-          key: clang-kei-r547379
-      - if: steps.clang.outputs.cache-hit != 'true'
-        run: rm -rf "$HOME/clang"; git clone --depth=1 https://gitlab.com/kei-space/clang/r547379 "$HOME/clang"
-      - run: echo "$HOME/clang/bin" >> "$GITHUB_PATH"
+          key: clang-neutron-30062026
+      - name: Neutron clang 30062026 (Track C — replaces kei r547379)
+        if: steps.clang.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          rm -rf "$HOME/clang"; mkdir -p "$HOME/clang"; cd "$HOME/clang"
+          curl -LSsO https://raw.githubusercontent.com/Neutron-Toolchains/antman/main/antman
+          chmod +x antman
+          ./antman -S=30062026
+          ./antman --patch=glibc
+      - run: |
+          echo "$HOME/clang/bin" >> "$GITHUB_PATH"
+          "$HOME/clang/bin/clang" --version | head -1
 
       - name: Sanity — base must be 6.1.175
         run: |
