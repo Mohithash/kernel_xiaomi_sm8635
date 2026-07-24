@@ -39,6 +39,22 @@ Four root flavors. Pick the exact root + hiding stack you want.
 
 </div>
 
+#### 🏆 Premium — everything in one Image
+
+The **Premium** flavor bundles the full stack on top of the base kernel:
+
+- **Root — SukiSU-Ultra** (latest `susfs_new`), reporting the correct `KSU_VERSION 40837` (not the `13000` fallback other builds hit).
+- **Hiding — SUSFS v2.2.0**: sus paths / mounts / kstat, `uname` + cmdline spoof, open-redirect, symbol hiding.
+- **Containers — DroidSpaces**: native LXC / rootless Docker via `USER_NS`, `PID_NS`, `IPC_NS` and `SYSVIPC` **relocated into `ANDROID_KABI_RESERVE` slots 6/7/8** so stock `vendor_dlkm` still loads (no bootloop).
+- **Calls kept working**: `DEBUG_INFO_BTF` stays enabled, so netd / IMS / **VoLTE** come up (disabling it is what broke calls in the earlier premium alpha).
+
+Everything below is shared by **all** 2.5 flavors, Premium included:
+
+- **DAMON** proactive reclaim + LRU-sort (built in, sysfs-gated), **Boeffla wakelock blocker** (empty by default — opt-in, never block modem wakelocks), **ZRAM writeback**.
+- Built with **Neutron clang 23** (LLVM trunk); **BORE** scheduler, **ADIOS** I/O, **MGLRU**, `HZ=300`, **BBR + CAKE** networking, uclamp.
+
+> KPM is **not** in Premium — SukiSU-Ultra's KPM is stubbed upstream on GKI. For real `.kpm`, use the **APatch** flavor.
+
 > [!NOTE]
 > KSUN and SukiSU don't ship kernel-side SUSFS — those builds use a **hand-authored port** written for this
 > kernel. ReSukiSU implements SUSFS natively, so its pairing is the cleanest.
