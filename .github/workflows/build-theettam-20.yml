@@ -247,7 +247,7 @@ jobs:
           grep -E '^CONFIG_SCHED_BORE=y' out/.config || { echo "::error::BORE not enabled"; exit 1; }
           grep -E '^CONFIG_MQ_IOSCHED_ADIOS=y' out/.config || { echo "::error::ADIOS not enabled"; exit 1; }
           # Track A memory tuning — must survive olddefconfig (DAMON_RECLAIM/LRU_SORT need DAMON_PADDR)
-          for o in DAMON_PADDR DAMON_RECLAIM DAMON_LRU_SORT ZRAM_WRITEBACK; do
+          for o in DAMON_PADDR DAMON_RECLAIM DAMON_LRU_SORT ZRAM_WRITEBACK BOEFFLA_WL_BLOCKER; do
             grep -qE "^CONFIG_$o=(y|m)" out/.config || { echo "::error::CONFIG_$o dropped in olddefconfig"; exit 1; }
           done
           if [ "${{ matrix.susfs }}" != "none" ]; then

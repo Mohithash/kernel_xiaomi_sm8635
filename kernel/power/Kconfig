@@ -203,6 +203,23 @@ config PM_WAKELOCKS_GC
 	depends on PM_WAKELOCKS
 	default y
 
+config BOEFFLA_WL_BLOCKER
+	bool "Boeffla wakelock blocker"
+	depends on PM_SLEEP
+	default n
+	help
+	  Kernel-level wakelock blocker with a sysfs interface, to cut idle
+	  battery drain by suppressing chosen wakeup sources by name via
+	  /sys/devices/virtual/misc/boeffla_wakelock_blocker/wakelock_blocker.
+	  The block list is EMPTY by default, so enabling this changes nothing
+	  until user space adds wakelock names — behaviour is identical to stock
+	  out of the box. It reads only ws->name, so it does not alter the
+	  wakeup_source ABI.
+
+	  WARNING: never add modem/paging wakelocks (e.g. qcom_rx_wakelock, IPA,
+	  ipa_wan, RMNET, WLAN RX). Blocking those breaks VoLTE call reception
+	  and mobile data.
+
 config PM
 	bool "Device power management core functionality"
 	help
