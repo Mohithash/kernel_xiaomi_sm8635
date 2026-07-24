@@ -57,15 +57,11 @@ jobs:
           restore-keys: |
             ccache-apatch-
             ccache-peridot175-
-      - id: clang
-        uses: actions/cache@v4
-        with:
-          path: ~/clang
-          key: clang-neutron-30062026
       - name: Neutron clang 30062026 (Track C — replaces kei r547379)
-        if: steps.clang.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
+          # NOT cached: actions/cache breaks antman's --patch=glibc binaries
+          # (restored clang -> "cannot execute"). Fetch fresh each build.
           rm -rf "$HOME/clang"; mkdir -p "$HOME/clang"; cd "$HOME/clang"
           curl -LSsO https://raw.githubusercontent.com/Neutron-Toolchains/antman/main/antman
           chmod +x antman

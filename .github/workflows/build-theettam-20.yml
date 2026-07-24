@@ -118,15 +118,12 @@ jobs:
           restore-keys: |
             ccache-t20-${{ matrix.id }}-
             ccache-peridot175-
-      - id: clang
-        uses: actions/cache@v4
-        with:
-          path: ~/clang
-          key: clang-neutron-30062026
       - name: Neutron clang 30062026 (Track C — replaces kei r547379)
-        if: steps.clang.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
+          # NOT cached on purpose: actions/cache mangles antman's --patch=glibc
+          # binaries; a restored clang fails with "cannot execute: required file
+          # not found". Fetch fresh each build (small download, always works).
           rm -rf "$HOME/clang"; mkdir -p "$HOME/clang"; cd "$HOME/clang"
           curl -LSsO https://raw.githubusercontent.com/Neutron-Toolchains/antman/main/antman
           chmod +x antman
