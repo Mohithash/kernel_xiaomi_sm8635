@@ -31,7 +31,7 @@ Four root flavors. Pick the exact root + hiding stack you want.
 | **ReSukiSU + SUSFS** | ReSukiSU | `v2.2.0` *(native)* | — | ReSukiSU | Root + hiding, **cleanest integration** |
 | **Premium** | SukiSU-Ultra | `v2.2.0` | — | SukiSU-Ultra | All-in-one: SukiSU + SUSFS + **DroidSpaces** containers |
 | **APatch** 🧪 | APatch / KernelPatch | — | ✅ **real** | APatch | The **only** flavor with working Kernel Patch Modules (`.kpm`) |
-| **KSUN + DroidSpaces** 🧪 | KernelSU-Next v3.3.0 | `v2.2.0` | — | KernelSU-Next | **Experimental** — LXC containers |
+| **KSUN + DroidSpaces** | KernelSU-Next v3.3.0 | `v2.2.0` | — | KernelSU-Next | Root + hiding + **LXC / Docker containers** |
 
 <sub>KPM: SukiSU-Ultra's is stubbed upstream on GKI, so real `.kpm` support comes only from APatch/KernelPatch. APatch uses its own manager app + superkey (baked as <code>theettam-change-me</code> — change it after first boot).</sub>
 
@@ -58,27 +58,27 @@ Everything below is shared by **all** 2.5 flavors, Premium included:
 > [!NOTE]
 > KSUN and SukiSU don't ship kernel-side SUSFS — those builds use a **hand-authored port** written for this
 > kernel. ReSukiSU implements SUSFS natively, so its pairing is the cleanest.
-> **The four flavors above are boot-tested on peridot at 6.1.175**, as is the bare base.
+> **All flavors are boot-tested on peridot at 6.1.175**, as is the bare base.
 >
-> The DroidSpaces row is **not** one of those four — it's a separate, experimental release (one device,
-> one test session; bootlooped twice before the working config was found). Details in the "Experimental:
-> DroidSpaces" section below, or the [release notes](../../releases/tag/droidspaces-v1) directly.
+> DroidSpaces bootlooped twice during bring-up before the KABI-safe config was found (`SYSVIPC`
+> relocated into `ANDROID_KABI_RESERVE` slots so stock `vendor_dlkm` still loads). It now boots
+> with containers working, and ships both as its own KSUN flavor and inside Premium. Details in
+> the "DroidSpaces" section below.
 
 > [!WARNING]
 > Flash with a **full backup and fastboot recovery ready**. Back up `boot.img` and `vendor_boot.img` first.
 
 ---
 
-## <img src="https://img.shields.io/badge/-02-8b5cf6?style=flat-square" height="18"> Experimental: DroidSpaces (LXC containers)
+## <img src="https://img.shields.io/badge/-02-8b5cf6?style=flat-square" height="18"> DroidSpaces (LXC containers)
 
-A 5th flavor — KernelSU-Next + SUSFS + [DroidSpaces](https://github.com/ravindu644/Droidspaces-OSS)
-(run real Linux containers, e.g. a full Alpine or Debian, natively on-device). **Separate release,
-not part of the 4 flavors above:** **[droidspaces-v1 →](../../releases/tag/droidspaces-v1)**
+KernelSU-Next + SUSFS + [DroidSpaces](https://github.com/ravindu644/Droidspaces-OSS) — run real
+Linux containers, e.g. a full Alpine or Debian, natively on-device. Ships as its own flavor in the
+matrix, and `USER_NS` + full DroidSpaces is also bundled into **Premium**.
 
 > [!IMPORTANT]
-> Boot-tested and containers confirmed working on one device — see the raw evidence in the release
-> notes. Still **EXPERIMENTAL**: one device, one test session. Flash with a backup and fastboot
-> recovery ready, same as always.
+> Boots with containers confirmed working on peridot. As with any flavor, flash with a backup and
+> fastboot recovery ready.
 
 <details>
 <summary><b>🔍 What it took to get here — two bootloops, and what actually caused them</b></summary>
@@ -189,7 +189,7 @@ Each addition targets a **different** bottleneck, which is why they compose inst
 - **CAKE isn't default.** Its advantage is *shaping* — you tell it the link bandwidth. A phone's radio bandwidth changes every few seconds and you can't name it. Unshaped, CAKE ≈ fq_codel. So it's built for people on a known link, and off for everyone else.
 - **PLB isn't advertised.** The code ships and is correct, but PLB repaths flows across datacenter ECMP by rewriting the IPv6 flow label. A phone has one path.
 - **KSM isn't enabled.** RAM dedup costs constant CPU scanning for little gain on a phone.
-- **`USER_NS` stays out of the shipping flavors.** Containers need it; it's also a well-worn privilege-escalation surface. It lives only in the experimental DroidSpaces build.
+- **`USER_NS` ships only in the container flavors** (DroidSpaces and Premium), which need it for rootless LXC/Docker. It's a well-worn privilege-escalation surface, so the lean flavors omit it. Where it does ship, `SYSVIPC` is relocated into `ANDROID_KABI_RESERVE` slots so stock `vendor_dlkm` still loads.
 - **The toolchain is stock AOSP clang.** Neutron's LTO/PGO/BOLT make *the compiler* faster, not the kernel it emits — and a rolling toolchain can't be pinned.
 
 The pattern is the same throughout: **add what addresses a real bottleneck, leave out what only sounds good.**

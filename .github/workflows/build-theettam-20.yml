@@ -66,7 +66,7 @@ jobs:
             kpm: 'false'
             zipname: SukiSU-Ultra-SUSFS2.2.0
           - id: ksun-susfs-droidspaces
-            label: KernelSU-Next + SUSFS + DroidSpaces (experimental)
+            label: KernelSU-Next + SUSFS + DroidSpaces
             repo: https://github.com/KernelSU-Next/KernelSU-Next
             clone_args: --depth=1 --branch v3.3.0
             pin: ''
@@ -74,7 +74,7 @@ jobs:
             script: integrate.sh
             droidspaces: 'true'
             kpm: 'false'
-            zipname: KSUN3.3.0-SUSFS2.2.0-DroidSpaces-EXPERIMENTAL
+            zipname: KSUN3.3.0-SUSFS2.2.0-DroidSpaces
           - id: resukisu-susfs
             label: ReSukiSU + SUSFS v2.2.0 (native)
             repo: https://github.com/ReSukiSU/ReSukiSU
