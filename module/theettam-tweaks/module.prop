@@ -1,0 +1,6 @@
+id=theettam_tweaks
+name=Theettam Tweaks
+version=v1.0
+versionCode=1
+author=Mohithash
+description=Modular, reversible battery/performance tweaks for Theettam Kernel. Independent toggles in tweaks.conf: screen-off wakelock trip (data-path only; calls/alarms/paging untouched), VM+I/O tuning, and battery/balanced/performance profiles. Everything reverts on uninstall + reboot. The trip lever needs a kernel with CONFIG_BOEFFLA_WL_BLOCKER (Theettam has it).
