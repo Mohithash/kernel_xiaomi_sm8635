@@ -28,7 +28,7 @@ permissions:
   contents: write
 
 env:
-  SUSFS_PIN: 8199bb6534174117ad907f726231484872ac345a   # susfs4ksu gki-android14-6.1 @ v2.2.0
+  SUSFS_PIN: 090cf407fea14d960cba55ce6f69cc61a146d1b3   # susfs4ksu gki-android14-6.1 @ v2.2.0 (Jul 23: OPEN_REDIRECT UAF/leak/deadlock fixes)
   KBUILD_BUILD_USER: build
   KBUILD_BUILD_HOST: localhost
 
@@ -79,7 +79,7 @@ jobs:
             label: ReSukiSU + SUSFS v2.2.0 (native)
             repo: https://github.com/ReSukiSU/ReSukiSU
             clone_args: ''
-            pin: aa32736680c91705ef68ab634cf276a7c42612d4
+            pin: 0b4f56fd92bcc47a24bd4add8d7125239531c4f5
             susfs: native
             kpm: 'false'
             zipname: ReSukiSU-SUSFS2.2.0
