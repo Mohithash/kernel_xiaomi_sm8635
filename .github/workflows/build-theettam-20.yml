@@ -169,6 +169,17 @@ jobs:
             if [ "$(git -C KernelSU rev-parse --is-shallow-repository)" = "true" ]; then
               git -C KernelSU fetch --unshallow --quiet || git -C KernelSU fetch --depth=100000 --quiet || true
             fi
+            # Integrate the kernel-side commits that landed on SukiSU `main` after our
+            # susfs_new pin (susfs_new lags main). Only the driver commits are pulled;
+            # the 16 manager-APK / dependency commits don't touch the compiled kernel.
+            # Pinned SHAs, verified to cherry-pick clean onto susfs_new. Chronological order.
+            git -C KernelSU fetch --quiet origin main || true
+            git -C KernelSU config user.email ci@theettam; git -C KernelSU config user.name ci
+            for c in baf01faf3e e15a797322 6428b35f84; do
+              git -C KernelSU cherry-pick -x "$c" >/dev/null 2>&1 \
+                || { git -C KernelSU cherry-pick --abort 2>/dev/null || true; echo "::error::SukiSU main kernel commit $c did not cherry-pick onto susfs_new"; exit 1; }
+              echo "  [+] integrated SukiSU main kernel commit $c"
+            done
             git -C KernelSU branch -f main HEAD
             _cnt=$(git -C KernelSU rev-list --count main)
             echo "[i] SukiSU version: count(main)=${_cnt} -> KSU_VERSION=$(expr 40000 + ${_cnt} - 2815)"
