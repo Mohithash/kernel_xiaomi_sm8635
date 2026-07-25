@@ -124,6 +124,18 @@ relying on the container as a privilege boundary.
 </details>
 
 
+#### 🔋 Battery & tuning — the optional **Theettam Tweaks** module
+
+A separate flashable ([`Theettam-Tweaks-v1.0.zip`](../../releases/latest)) with **independent, reversible levers** — nothing is baked into the kernel, and uninstalling the module + rebooting returns everything to stock. Config lives at `/data/adb/modules/theettam_tweaks/tweaks.conf`.
+
+| Lever | What it does | Default |
+|:--|:--|:-:|
+| **Screen-off wakelock trip** | Blocks modem **data-path** (IPA/RMNET) wakelocks *only while the screen is off* — the biggest idle-drain lever. **Calls, SMS, alarms and paging are untouched**; clears on charger/screen-on. Needs `CONFIG_BOEFFLA_WL_BLOCKER` (all flavors have it). | on |
+| **VM + I/O tuning** | `watermark_scale_factor=100`, zram-tuned swappiness, `page-cluster=0`, less-frequent dirty writeback (fewer wakeups), readahead/nr_requests. | on |
+| **Profiles** | `battery` / `balanced` / `performance` — mutually exclusive. **battery** adds a screen-off prime-CPU freq cap (restored on wake); **performance** raises min-freqs and turns the trip off. Cycle via the module's **Action** button. | balanced |
+
+> The levers **coexist** — toggle each in `tweaks.conf`. The one big win is the screen-off trip; the rest is safe polish on an already-tuned kernel.
+
 ## <img src="https://img.shields.io/badge/-03-c084fc?style=flat-square" height="18"> Features
 
 Everything below is read from the **resolved config**, not the defconfig — a Kconfig `default y`
