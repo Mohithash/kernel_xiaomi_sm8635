@@ -221,14 +221,13 @@ jobs:
           bash scripts/susfs/integrate-native.sh "$PWD/susfs4ksu" "$PWD"
           if find . -name '*.rej' | grep -q .; then echo "::error::rejects present"; find . -name '*.rej' -exec cat {} +; exit 1; fi
 
-      # DISABLED — diagnosing boot failure; re-enable once confirmed not the cause
-      #- name: Fix selinux_hide hook binding under ThinLTO
-      #  if: matrix.apatch != 'true'
-      #  run: |
-      #    set -euo pipefail
-      #    F=KernelSU/kernel/hook/lsm_hook.c
-      #    [ -f "$F" ] || { echo "[i] No lsm_hook.c (not a KSU build), skip"; exit 0; }
-      #    bash scripts/fix-lsm-hook-lto.sh "$F"
+      - name: Fix selinux_hide hook binding under ThinLTO
+        if: matrix.apatch != 'true'
+        run: |
+          set -euo pipefail
+          F=KernelSU/kernel/hook/lsm_hook.c
+          [ -f "$F" ] || { echo "[i] No lsm_hook.c (not a KSU build), skip"; exit 0; }
+          bash scripts/fix-lsm-hook-lto.sh "$F"
 
       - name: Integrate DroidSpaces — relocate SYSVIPC out of task_struct
         if: matrix.droidspaces == 'true'
