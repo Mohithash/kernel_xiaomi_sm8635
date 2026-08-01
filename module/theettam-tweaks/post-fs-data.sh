@@ -7,6 +7,13 @@ MODDIR=${0%/*}
 CONF="$MODDIR/tweaks.conf"
 conf() { sed -n "s/^$1=//p" "$CONF" 2>/dev/null | head -1; }
 
+# --- Clean custom-ROM property residue ---
+# ro.modversion leaks the ROM identity to detection apps. Removing it
+# is harmless — nothing in the system reads it at runtime.
+if [ "$(conf hide_rom_props)" = "1" ]; then
+  resetprop --delete ro.modversion 2>/dev/null
+fi
+
 PROFILE="$(conf PROFILE)"; [ -n "$PROFILE" ] || PROFILE=balanced
 [ "$(conf vmtune)" = "1" ] || exit 0
 
