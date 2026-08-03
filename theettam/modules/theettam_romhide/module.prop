@@ -1,0 +1,6 @@
+id=theettam_romhide
+name=Theettam ROM Prop Hide
+version=v1.0.1
+versionCode=10001
+author=Mohithash
+description=Standalone. Strips VoltageOS/Custom-ROM identity props and deletes sys.oem_unlock_allowed (contradicts locked state) via resetprop. Reversible: uninstall + reboot.

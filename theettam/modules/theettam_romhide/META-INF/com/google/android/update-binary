@@ -1,0 +1,34 @@
+#!/sbin/sh
+##########################################################
+# Magisk / KernelSU / APatch universal module installer stub
+##########################################################
+umask 022
+ui_print() { echo "$1"; }
+
+OUTFD=$2
+ZIPFILE=$3
+mount /data 2>/dev/null
+
+# Source whichever manager's util_functions exists.
+for UF in /data/adb/ksu/util_functions.sh \
+          /data/adb/ap/util_functions.sh \
+          /data/adb/magisk/util_functions.sh; do
+  if [ -f "$UF" ]; then . "$UF"; break; fi
+done
+
+if type install_module >/dev/null 2>&1; then
+  install_module
+  exit 0
+fi
+
+# ---- Fallback manual install (no util_functions available) ----
+ui_print "- Manual install (no util_functions found)"
+MODID=theettam_romhide
+MODPATH=/data/adb/modules_update/$MODID
+rm -rf "$MODPATH"; mkdir -p "$MODPATH"
+unzip -o "$ZIPFILE" -x 'META-INF/*' -d "$MODPATH" >/dev/null 2>&1
+rm -f "$MODPATH/update"; touch "$MODPATH/update"
+set_perm_recursive() { :; }
+chmod 0755 "$MODPATH"/*.sh 2>/dev/null
+ui_print "- Done. Reboot to apply."
+exit 0
