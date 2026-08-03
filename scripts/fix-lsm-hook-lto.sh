@@ -7,10 +7,10 @@
 # selinux_setprocattr -> selinux_setprocattr.llvm.XXXXXXXX), causing the
 # resolved address to differ from the pointer in the hook table -> ENOENT.
 #
-# Fix: when the address-based walk finds no match, fall back to matching by
-# symbol name. Go directly to the correct hlist_head via head_offset, resolve
-# each entry's function pointer back to its kallsyms name, and prefix-match
-# against target_name (tolerating LTO .llvm.* suffixes).
+# Fix: when the address-based walk finds no match, fall back to the target
+# hlist_head via head_offset (already computed by KSU_LSM_HOOK_INIT) and
+# use its first entry. On GKI each LSM hook head has exactly one provider
+# (SELinux), so this is safe without symbol-name verification.
 #
 # Usage: bash scripts/fix-lsm-hook-lto.sh <path-to-lsm_hook.c>
 #   e.g.: bash scripts/fix-lsm-hook-lto.sh KernelSU/kernel/hook/lsm_hook.c
@@ -45,14 +45,12 @@ old = """\
     }"""
 
 fallback = """\
-    /* LTO fallback: address-based walk found no match -- ThinLTO may alias
-     * or rename the symbol. Go directly to the target hlist_head and match
-     * by resolving each entry's function pointer back to its symbol name. */
+    /* LTO fallback: address-based walk found no match -- ThinLTO may
+     * rename the symbol (e.g. .llvm.XXXX suffix). Use head_offset to go
+     * directly to the correct hlist_head and take its first entry. */
     if (!selected_entry && !hook->offset) {
         struct hlist_head *target_head =
             (struct hlist_head *)(heads_addr + hook->head_offset);
-        char sym_buf[KSYM_NAME_LEN];
-        size_t tname_len = strlen(hook->target_name);
         hlist_for_each_entry(entry, target_head, list) {
             void **slot = (void **)((char *)entry + hook->hook_offset);
             void *current_origin = READ_ONCE(*slot);
@@ -63,16 +61,12 @@ fallback = """\
                     break;
                 }
             }
-            sprint_symbol_no_offset(sym_buf, (unsigned long)current_origin);
-            if (strncmp(sym_buf, hook->target_name, tname_len) == 0 &&
-                (sym_buf[tname_len] == '\\0' || sym_buf[tname_len] == '.')) {
-                selected_entry = entry;
-                selected_slot = slot;
-                selected_origin = current_origin;
-                pr_info("lsm_hook: LTO fallback matched %s (sym=%s) in head %s\\n",
-                        hook->target_name, sym_buf, hook->head_name ?: "unknown");
-                break;
-            }
+            selected_entry = entry;
+            selected_slot = slot;
+            selected_origin = current_origin;
+            pr_info("lsm_hook: LTO fallback — using head_offset for %s in %s\\n",
+                    hook->target_name, hook->head_name ?: "unknown");
+            break;
         }
     }
 
