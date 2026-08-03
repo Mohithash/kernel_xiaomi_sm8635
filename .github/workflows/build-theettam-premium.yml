@@ -65,31 +65,13 @@ jobs:
         run: |
           set -euo pipefail
           test -f dist/Image-premium-sukisu
-          git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git ak3
+          # Use the device-tested in-repo AnyKernel3 (Theettam banner + init_boot-aware install)
+          rm -rf ak3; cp -r anykernel ak3
           cp -f dist/Image-premium-sukisu ak3/Image
-          printf '%s\n' \
-            '### AnyKernel3' \
-            'properties() { ''' \
-            'kernel.string=Theettam-Premium-CALLSAFE-noUSERNS' \
-            'do.devicecheck=0' \
-            'do.modules=0' \
-            'do.systemless=0' \
-            'do.cleanup=1' \
-            'do.cleanuponabort=0' \
-            'device.name1=peridot' \
-            '''; }' \
-            'block=boot' \
-            'is_slot_device=auto' \
-            'ramdisk_compression=auto' \
-            'patch_vbmeta_flag=auto' \
-            'no_magisk_check=1' \
-            '. tools/ak3-core.sh' \
-            'dump_boot' \
-            'write_boot' \
-            > ak3/anykernel.sh
+          sed -i 's/^kernel.string=.*/kernel.string=Theettam-Premium-CALLSAFE-noUSERNS/' ak3/anykernel.sh
           SHA=$(git rev-parse --short HEAD)
           ZIP="Theettam-Premium-CALLSAFE-noUSERNS-peridot-6.1.175-${SHA}.zip"
-          (cd ak3 && zip -r9 "../dist/${ZIP}" Image anykernel.sh META-INF tools LICENSE.txt || zip -r9 "../dist/${ZIP}" Image anykernel.sh META-INF tools)
+          (cd ak3 && zip -r9 "../dist/${ZIP}" . -x '.git*')
           ls -la dist/
 
       - name: Upload
