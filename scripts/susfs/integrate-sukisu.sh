@@ -253,6 +253,31 @@ print("  [+] namespace.c susfs decls applied")
 PY
 rm -f fs/namespace.c.rej fs/namespace.c.orig
 
+# --- 6b) Theettam: mask DirtySepolicy fsck_untrusted CAP_SYS_ADMIN in selinux_hide ---
+# Duck Detector probes fsck_untrusted -> self:capability sys_admin, which VoltageOS's
+# device sepolicy legitimately allows. Keep the live rule (fsck still works) but make
+# selinux_hide report that DirtySepolicy edge as denied.
+SH="$KSUN_DIR/kernel/feature/selinux_hide.c"
+if [ -f "$SH" ]; then
+python3 - "$SH" <<'PY'
+import sys
+p = sys.argv[1]; s = open(p).read()
+if "fsck_untrusted" in s:
+    print("  [=] selinux_hide fsck_untrusted mask already present"); sys.exit(0)
+needle = 'length = scnprintf(buf, SIMPLE_TRANSACTION_LIMIT, "%x %x %x %x %u %x", avd.allowed'
+i = s.find(needle)
+if i < 0:
+    sys.stderr.write("::error::selinux_hide.c scnprintf anchor not found\n"); sys.exit(1)
+mask = ('/* Theettam: neutralise DirtySepolicy fsck_untrusted CAP_SYS_ADMIN canary */\n'
+        '    if (tclass == SECCLASS_CAPABILITY && scon && strstr(scon, ":fsck_untrusted:"))\n'
+        '        avd.allowed &= ~(1U << 21); /* CAP_SYS_ADMIN */\n\n    ')
+open(p, "w").write(s[:i] + mask + s[i:])
+print("  [+] selinux_hide.c: fsck_untrusted CAP_SYS_ADMIN mask applied")
+PY
+else
+  echo "  [!] selinux_hide.c not found at $SH (skipping fsck mask)"
+fi
+
 # --- 7) empty the protected-exports ABI lists so vendor modules (wifi/bt) still
 # load after susfs's symbol/CRC changes. Standard for susfs+GKI; matches the
 # proven build-susfs173.yml. Without this, a shifted CRC on a protected symbol
