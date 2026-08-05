@@ -269,7 +269,7 @@ i = s.find(needle)
 if i < 0:
     sys.stderr.write("::error::selinux_hide.c scnprintf anchor not found\n"); sys.exit(1)
 mask = ('/* Theettam: neutralise DirtySepolicy fsck_untrusted CAP_SYS_ADMIN canary */\n'
-        '    if (tclass == SECCLASS_CAPABILITY && scon && strstr(scon, ":fsck_untrusted:"))\n'
+        '    if (scon && tcon && strstr(scon, ":fsck_untrusted:") && strstr(tcon, ":fsck_untrusted:"))\n'
         '        avd.allowed &= ~(1U << 21); /* CAP_SYS_ADMIN */\n\n    ')
 open(p, "w").write(s[:i] + mask + s[i:])
 print("  [+] selinux_hide.c: fsck_untrusted CAP_SYS_ADMIN mask applied")
