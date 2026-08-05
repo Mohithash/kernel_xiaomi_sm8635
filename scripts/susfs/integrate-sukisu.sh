@@ -253,29 +253,31 @@ print("  [+] namespace.c susfs decls applied")
 PY
 rm -f fs/namespace.c.rej fs/namespace.c.orig
 
-# --- 6b) Theettam: mask DirtySepolicy fsck_untrusted CAP_SYS_ADMIN in selinux_hide ---
-# Duck Detector probes fsck_untrusted -> self:capability sys_admin, which VoltageOS's
-# device sepolicy legitimately allows. Keep the live rule (fsck still works) but make
-# selinux_hide report that DirtySepolicy edge as denied.
+# --- 6b) Theettam: mask DirtySepolicy canaries in selinux_hide (fsck cap; adbd->adbroot) ---
+# Duck Detector probes fsck_untrusted->self:capability sys_admin and adbd->adbroot:binder,
+# both of which VoltageOS device sepolicy legitimately allows. Keep the live rules (fsck +
+# Lineage adb-root still work) but report those DirtySepolicy edges as denied to apps.
 SH="$KSUN_DIR/kernel/feature/selinux_hide.c"
 if [ -f "$SH" ]; then
 python3 - "$SH" <<'PY'
 import sys
 p = sys.argv[1]; s = open(p).read()
-if "fsck_untrusted" in s:
-    print("  [=] selinux_hide fsck_untrusted mask already present"); sys.exit(0)
+if "adbroot" in s:
+    print("  [=] selinux_hide canary masks already present"); sys.exit(0)
 needle = 'length = scnprintf(buf, SIMPLE_TRANSACTION_LIMIT, "%x %x %x %x %u %x", avd.allowed'
 i = s.find(needle)
 if i < 0:
     sys.stderr.write("::error::selinux_hide.c scnprintf anchor not found\n"); sys.exit(1)
-mask = ('/* Theettam: neutralise DirtySepolicy fsck_untrusted CAP_SYS_ADMIN canary */\n'
+mask = ('/* Theettam: neutralise DirtySepolicy canaries (fsck cap; adbd->adbroot) */\n'
         '    if (scon && tcon && strstr(scon, ":fsck_untrusted:") && strstr(tcon, ":fsck_untrusted:"))\n'
-        '        avd.allowed &= ~(1U << 21); /* CAP_SYS_ADMIN */\n\n    ')
+        '        avd.allowed &= ~(1U << 21); /* CAP_SYS_ADMIN */\n'
+        '    if (scon && tcon && strstr(scon, ":adbd:") && strstr(tcon, ":adbroot:"))\n'
+        '        avd.allowed = 0; /* deny adbd->adbroot binder (Lineage adb-root) */\n\n    ')
 open(p, "w").write(s[:i] + mask + s[i:])
-print("  [+] selinux_hide.c: fsck_untrusted CAP_SYS_ADMIN mask applied")
+print("  [+] selinux_hide.c: fsck + adbd->adbroot masks applied")
 PY
 else
-  echo "  [!] selinux_hide.c not found at $SH (skipping fsck mask)"
+  echo "  [!] selinux_hide.c not found at $SH (skipping masks)"
 fi
 
 # --- 7) empty the protected-exports ABI lists so vendor modules (wifi/bt) still
