@@ -4,7 +4,7 @@
 ### AnyKernel setup
 # global properties
 properties() { '
-kernel.string=Theettam Kernel
+kernel.string=Theettam · SukiSU Ultra
 do.devicecheck=0
 do.modules=0
 do.systemless=0
@@ -39,11 +39,12 @@ ui_print "     \\_       >>--  \\/  --<<       _/"
 ui_print "        \\~~/   peridot . SM8635  \\~~/"
 ui_print "   =========================================="
 ui_print "        POCO F6  /  Redmi Turbo 3  (SM8635)"
+ui_print "        SukiSU Ultra baked  ·  SUSFS ready"
 ui_print "   =========================================="
 ui_print " "
 ui_print "   Kernel version detected : $kernel_version"
 ui_print " "
-ui_print "   >>>  Flashing Theettam onto boot...  <<<"
+ui_print "   >>>  Flashing Theettam + SukiSU Ultra onto boot...  <<<"
 ui_print " "
 ui_print "   ------------------------------------------"
 ui_print "    Psst... curious what 'Theettam' means?"
