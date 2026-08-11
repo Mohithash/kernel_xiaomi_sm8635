@@ -129,8 +129,12 @@ static ssize_t sel_read_enforce(struct file *filp, char __user *buf,
 	char tmpbuf[TMPBUFLEN];
 	ssize_t length;
 
-	length = scnprintf(tmpbuf, TMPBUFLEN, "%d",
-			   enforcing_enabled(fsi->state));
+	/* BESTROM_SELINUX_SPOOF: always report Enforcing (1) to userspace.
+	 * Real AVC mode stays whatever enforcing_enabled() is (permissive for LSPosed).
+	 * fsi kept for ABI/structure parity; not used for the spoofed value.
+	 */
+	(void)fsi;
+	length = scnprintf(tmpbuf, TMPBUFLEN, "%d", 1);
 	return simple_read_from_buffer(buf, count, ppos, tmpbuf, length);
 }
 
@@ -173,18 +177,21 @@ static ssize_t sel_write_enforce(struct file *file, const char __user *buf,
 		audit_log(audit_context(), GFP_KERNEL, AUDIT_MAC_STATUS,
 			"enforcing=%d old_enforcing=%d auid=%u ses=%u"
 			" enabled=1 old-enabled=1 lsm=selinux res=1",
-			new_value, old_value,
+			/* BESTROM_SELINUX_SPOOF_WRITE: userspace may request 1; real stays 0 */
+			1, old_value,
 			from_kuid(&init_user_ns, audit_get_loginuid(current)),
 			audit_get_sessionid(current));
-		enforcing_set(state, new_value);
-		if (new_value)
-			avc_ss_reset(state->avc, 0);
-		selnl_notify_setenforce(new_value);
-		selinux_status_update_setenforce(state, new_value);
-		if (!new_value)
-			call_blocking_lsm_notifier(LSM_POLICY_CHANGE, NULL);
+		/* Real AVC: always permissive for LSPosed module inject/hooks */
+		enforcing_set(state, false);
+		/* Do not avc_ss_reset on fake enforce transitions */
+		selnl_notify_setenforce(1);
+		selinux_status_update_setenforce(state, 1);
+		call_blocking_lsm_notifier(LSM_POLICY_CHANGE, NULL);
 
 		selinux_ima_measure_state(state);
+	} else if (!old_value) {
+		/* Already permissive: still ensure status page reports Enforcing */
+		selinux_status_update_setenforce(state, 1);
 	}
 	length = count;
 out:
