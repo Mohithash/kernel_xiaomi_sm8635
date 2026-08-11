@@ -1,0 +1,143 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+/*
+ * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ */
+#ifndef __HGSL_UTILS_H
+#define __HGSL_UTILS_H
+
+#include <linux/vmalloc.h>
+#include <linux/mm.h>
+#include <linux/slab.h>
+#include <linux/types.h>
+#include <linux/sched/signal.h>
+#include <linux/stdarg.h>
+#include <linux/regmap.h>
+
+enum {
+	LOG_LEVEL_ERROR,
+	LOG_LEVEL_WARN,
+	LOG_LEVEL_INFO,
+	LOG_LEVEL_DEBUG,
+	LOG_LEVEL_NUM
+};
+
+#define LOGE(...) hgsl_log(LOG_LEVEL_ERROR, __func__, __LINE__, ##__VA_ARGS__)
+#define LOGW(...) hgsl_log(LOG_LEVEL_WARN, __func__, __LINE__, ##__VA_ARGS__)
+#define LOGI(...)
+#define LOGD(...)
+
+#define OS_UNUSED(param) ((void)param)
+
+static inline void *hgsl_malloc(size_t size)
+{
+	if (size <= PAGE_SIZE)
+		return kmalloc(size, GFP_KERNEL);
+
+	return vmalloc(size);
+}
+
+static inline void *hgsl_zalloc(size_t size)
+{
+	if (size <= PAGE_SIZE)
+		return kzalloc(size, GFP_KERNEL);
+
+	return vzalloc(size);
+}
+
+static inline void hgsl_free(void *ptr)
+{
+	if (ptr != NULL) {
+		if (is_vmalloc_addr(ptr))
+			vfree(ptr);
+		else
+			kfree(ptr);
+	}
+}
+
+static inline void hgsl_log(unsigned int level, const char * const fun,
+	unsigned int line, const char *format, ...)
+{
+	va_list arglist;
+	char buffer[512];
+	const char *tag = NULL;
+	unsigned int offset = 0;
+	struct pid *pid = task_tgid(current);
+	struct task_struct *task = pid_task(pid, PIDTYPE_PID);
+
+	switch (level) {
+	case LOG_LEVEL_DEBUG:
+		tag = "DEBUG";
+		break;
+	case LOG_LEVEL_INFO:
+		tag = "INFO";
+		break;
+	case LOG_LEVEL_WARN:
+		tag = "WARNING";
+		break;
+	case LOG_LEVEL_ERROR:
+		tag = "ERROR";
+		break;
+	default:
+		tag = "UNKNOWN";
+		break;
+	}
+
+	if (task)
+		snprintf(buffer, sizeof(buffer), "HGSL [%s] [%s:%u] [%s:%u:%u]",
+			tag, fun, line, task->comm, task_pid_nr(task), current->pid);
+	else
+		snprintf(buffer, sizeof(buffer), "HGSL [%s] [%s:%u]",
+			tag, fun, line);
+
+	offset = strlen(buffer);
+	va_start(arglist, format);
+	vsnprintf(buffer + offset, sizeof(buffer) - offset, format, arglist);
+	va_end(arglist);
+
+	pr_err("%s\n", buffer);
+}
+
+static inline u32 hgsl_regmap_read(struct regmap *regmap, u32 offset)
+{
+	u32 val;
+
+	regmap_read(regmap, offset, &val);
+	/* Ensure all previous reads has completed before return */
+	rmb();
+	return val;
+}
+
+static inline void hgsl_regmap_write(struct regmap *regmap, u32 offset, u32 value)
+{
+	/* Ensure all previous writes has completed */
+	wmb();
+	regmap_write(regmap, offset, value);
+}
+
+static inline int hgsl_check_userparams(
+	uint64_t uaddr64,
+	uint32_t usize)
+{
+	unsigned long uaddr, size, end;
+
+	if (!uaddr64 || !usize)
+		return -EINVAL;
+
+	uaddr = (unsigned long)untagged_addr(uaddr64);
+	size = (unsigned long)usize;
+
+	/* Check for integer overflow */
+	if (uaddr > ULONG_MAX - size)
+		return -EINVAL;
+
+	end = uaddr + size;
+
+	/* Quick check user addr limit */
+	if (uaddr >= TASK_SIZE_MAX || end > TASK_SIZE_MAX)
+		return -EFAULT;
+
+	return 0;
+}
+
+#endif  /* __HGSL_UTILS_H */

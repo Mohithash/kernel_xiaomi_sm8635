@@ -1,0 +1,47 @@
+{
+  "_comment": "Pinned upstreams for the Theettam peridot kernel. scripts/ci/check-upstreams.py compares these against the real upstreams and reports drift. Bumping a pin here does NOT rebuild anything by itself \u2014 the build workflow carries its own pins, and they are meant to be updated together in a reviewed commit.",
+  "ack": {
+    "name": "Android Common Kernel (android14-6.1-lts)",
+    "kind": "git-tags",
+    "url": "https://android.googlesource.com/kernel/common",
+    "tag_glob": "refs/tags/android14-6.1.*_r00",
+    "current": "android14-6.1.175_r00",
+    "note": "A new LTS tag needs a real 3-way merge with hand-resolved conflicts. Never auto-merge to a release."
+  },
+  "guidixx": {
+    "name": "GuidixX/kernel_xiaomi_sm8635 (16.2) \u2014 device base",
+    "kind": "github-branch",
+    "repo": "GuidixX/kernel_xiaomi_sm8635",
+    "branch": "16.2",
+    "current": "209fbd25e11521dca34905dc30bb4d2e0c79743b",
+    "note": "The device base this fork is built on. New commits here are peridot hardware fixes (charging, display, camera) and boot-safety reverts. Merge them rather than cherry-picking: the revert set is why this kernel boots at all."
+  },
+  "ksun": {
+    "name": "KernelSU-Next",
+    "kind": "github-tags",
+    "repo": "KernelSU-Next/KernelSU-Next",
+    "current": "v3.3.0"
+  },
+  "sukisu": {
+    "name": "SukiSU-Ultra (susfs_new)",
+    "kind": "github-branch",
+    "repo": "SukiSU-Ultra/SukiSU-Ultra",
+    "branch": "susfs_new",
+    "current": "278d822a4ebd214bcfd774b7910cb11cdc560bb9"
+  },
+  "resukisu": {
+    "name": "ReSukiSU",
+    "kind": "github-branch",
+    "repo": "ReSukiSU/ReSukiSU",
+    "branch": "main",
+    "current": "aa32736680c91705ef68ab634cf276a7c42612d4"
+  },
+  "susfs": {
+    "name": "susfs4ksu (gki-android14-6.1)",
+    "kind": "gitlab-branch",
+    "project": "simonpunk/susfs4ksu",
+    "branch": "gki-android14-6.1",
+    "current": "8199bb6534174117ad907f726231484872ac345a",
+    "note": "v2.2.0. The hand-port grafts susfs's CMD dispatch into the driver's reboot kprobe; a susfs bump can move the anchors, so integrate.sh may need work."
+  }
+}

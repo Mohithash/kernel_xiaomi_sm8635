@@ -1,0 +1,6 @@
+id=theettam_trip
+name=Theettam Trip Mode
+version=v1.0
+versionCode=1
+author=Mohithash
+description=Blocks the modem data-path wakelocks while the screen is off, using the Boeffla wakelock blocker built into Theettam Kernel. Calls, SMS and alarms are untouched. Requires a kernel with CONFIG_BOEFFLA_WL_BLOCKER.

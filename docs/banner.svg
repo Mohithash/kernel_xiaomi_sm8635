@@ -1,0 +1,113 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 340" width="1280" height="340" role="img" aria-label="Theettam Kernel — peridot, GKI 6.1.175">
+  <title>Theettam Kernel — peridot (POCO F6 / Redmi Turbo 3) — GKI 6.1.175</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%"   stop-color="#0b1020"/>
+      <stop offset="55%"  stop-color="#111a35"/>
+      <stop offset="100%" stop-color="#0a0f1e"/>
+    </linearGradient>
+
+    <!-- slow aurora drift behind the title -->
+    <radialGradient id="aura" cx="50%" cy="50%" r="50%">
+      <stop offset="0%"   stop-color="#4f8cff" stop-opacity=".55"/>
+      <stop offset="60%"  stop-color="#7c5cff" stop-opacity=".18"/>
+      <stop offset="100%" stop-color="#7c5cff" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- sweeping highlight that rides across the wordmark -->
+    <linearGradient id="shine" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%"   stop-color="#9ecbff"/>
+      <stop offset="42%"  stop-color="#e8f1ff"/>
+      <stop offset="50%"  stop-color="#ffffff"/>
+      <stop offset="58%"  stop-color="#e8f1ff"/>
+      <stop offset="100%" stop-color="#7aa7ff"/>
+      <animateTransform attributeName="gradientTransform" type="translate"
+                        values="-1 0; 1 0; -1 0" dur="7s" repeatCount="indefinite"/>
+    </linearGradient>
+
+    <linearGradient id="rule" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%"   stop-color="#4f8cff" stop-opacity="0"/>
+      <stop offset="50%"  stop-color="#7c5cff" stop-opacity=".9"/>
+      <stop offset="100%" stop-color="#4f8cff" stop-opacity="0"/>
+    </linearGradient>
+
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="18"/>
+    </filter>
+
+    <pattern id="grid" width="34" height="34" patternUnits="userSpaceOnUse">
+      <path d="M34 0H0V34" fill="none" stroke="#7aa7ff" stroke-opacity=".07" stroke-width="1"/>
+    </pattern>
+
+    <clipPath id="clipAll"><rect width="1280" height="340" rx="18"/></clipPath>
+  </defs>
+
+  <style>
+    .wm     { font: 800 92px/1 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; letter-spacing: 6px; }
+    .sub    { font: 600 25px/1 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; letter-spacing: 3.5px; fill:#93a7c9; }
+    .chip   { font: 700 17px/1 'SFMono-Regular', Consolas, monospace; letter-spacing: .6px; }
+
+    .aura   { animation: drift 14s ease-in-out infinite; transform-origin: 640px 150px; }
+    @keyframes drift {
+      0%,100% { transform: translate(-70px,0) scale(1); opacity:.85; }
+      50%     { transform: translate(70px,10px) scale(1.14); opacity:1; }
+    }
+    .pip    { animation: blink 2.4s ease-in-out infinite; }
+    .pip2   { animation: blink 2.4s ease-in-out .8s infinite; }
+    .pip3   { animation: blink 2.4s ease-in-out 1.6s infinite; }
+    @keyframes blink { 0%,100% { opacity:.25 } 50% { opacity:1 } }
+
+    .scan   { animation: sweep 6s linear infinite; }
+    @keyframes sweep { 0% { transform: translateX(-340px) } 100% { transform: translateX(1300px) } }
+
+    @media (prefers-reduced-motion: reduce) {
+      .aura, .pip, .pip2, .pip3, .scan { animation: none; }
+    }
+  </style>
+
+  <g clip-path="url(#clipAll)">
+    <rect width="1280" height="340" fill="url(#bg)"/>
+    <rect width="1280" height="340" fill="url(#grid)"/>
+    <ellipse class="aura" cx="640" cy="150" rx="430" ry="150" fill="url(#aura)" filter="url(#soft)"/>
+
+    <!-- travelling scanline -->
+    <rect class="scan" x="0" y="0" width="150" height="340" fill="#7aa7ff" opacity=".05"/>
+
+    <!-- wordmark -->
+    <text class="wm" x="640" y="150" text-anchor="middle" fill="url(#shine)">THEETTAM</text>
+    <text class="sub" x="640" y="192" text-anchor="middle">K E R N E L</text>
+
+    <path d="M300 216 H980" stroke="url(#rule)" stroke-width="2"/>
+
+    <!-- device line -->
+    <text class="sub" x="640" y="250" text-anchor="middle" style="font-size:19px; letter-spacing:2px; fill:#7f93b8;">
+      peridot · POCO F6 / Redmi Turbo 3 · Snapdragon 8s Gen 3
+    </text>
+
+    <!-- chips -->
+    <g transform="translate(640,292)">
+      <g transform="translate(-322,0)">
+        <rect x="0" y="-17" width="150" height="34" rx="17" fill="#132244" stroke="#2f4d86"/>
+        <circle class="pip" cx="20" cy="0" r="4" fill="#4ade80"/>
+        <text class="chip" x="36" y="6" fill="#bcd2f5">GKI 6.1.175</text>
+      </g>
+      <g transform="translate(-158,0)">
+        <rect x="0" y="-17" width="132" height="34" rx="17" fill="#132244" stroke="#2f4d86"/>
+        <circle class="pip2" cx="20" cy="0" r="4" fill="#60a5fa"/>
+        <text class="chip" x="36" y="6" fill="#bcd2f5">SUSFS 2.2</text>
+      </g>
+      <g transform="translate(-8,0)">
+        <rect x="0" y="-17" width="126" height="34" rx="17" fill="#132244" stroke="#2f4d86"/>
+        <circle class="pip3" cx="20" cy="0" r="4" fill="#c084fc"/>
+        <text class="chip" x="36" y="6" fill="#bcd2f5">4 flavors</text>
+      </g>
+      <g transform="translate(136,0)">
+        <rect x="0" y="-17" width="186" height="34" rx="17" fill="#132244" stroke="#2f4d86"/>
+        <circle class="pip" cx="20" cy="0" r="4" fill="#fbbf24"/>
+        <text class="chip" x="36" y="6" fill="#bcd2f5">BORE · ADIOS</text>
+      </g>
+    </g>
+
+    <rect x="0" y="336" width="1280" height="4" fill="url(#rule)"/>
+  </g>
+</svg>
