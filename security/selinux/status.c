@@ -53,7 +53,8 @@ struct page *selinux_kernel_status_page(struct selinux_state *state)
 
 			status->version = SELINUX_KERNEL_STATUS_VERSION;
 			status->sequence = 0;
-			status->enforcing = enforcing_enabled(state);
+			/* BESTROM_SELINUX_SPOOF: status page always Enforcing */
+			status->enforcing = 1;
 			/*
 			 * NOTE: the next policyload event shall set
 			 * a positive value on the status->policyload,
@@ -88,7 +89,9 @@ void selinux_status_update_setenforce(struct selinux_state *state,
 		status->sequence++;
 		smp_wmb();
 
-		status->enforcing = enforcing;
+		/* BESTROM_SELINUX_SPOOF: ignore real mode; always report 1 */
+		status->enforcing = 1;
+		(void)enforcing;
 
 		smp_wmb();
 		status->sequence++;
