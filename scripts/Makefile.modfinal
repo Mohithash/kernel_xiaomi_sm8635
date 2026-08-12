@@ -39,14 +39,8 @@ quiet_cmd_ld_ko_o = LD [M]  $@
 		-T scripts/module.lds -o $@ $(filter %.o, $^);		\
 	$(if $(ARCH_POSTLINK), $(MAKE) -f $(ARCH_POSTLINK) $@, true)
 
-quiet_cmd_btf_ko = BTF [M] $@
-      cmd_btf_ko = 							\
-	if [ ! -f $(mixed-build-prefix)vmlinux ]; then					\
-		printf "Skipping BTF generation for %s due to unavailability of $(mixed-build-prefix)vmlinux\n" $@ 1>&2; \
-	else								\
-		LLVM_OBJCOPY="$(OBJCOPY)" $(PAHOLE) -J $(PAHOLE_FLAGS) --btf_base $(mixed-build-prefix)vmlinux $@; \
-		$(RESOLVE_BTFIDS) -b $(mixed-build-prefix)vmlinux $@; 			\
-	fi;
+quiet_cmd_btf_ko = BTF [M] $@ (skipped-bestrom)
+      cmd_btf_ko = true
 
 # Same as newer-prereqs, but allows to exclude specified extra dependencies
 newer_prereqs_except = $(filter-out $(PHONY) $(1),$?)
@@ -60,7 +54,7 @@ if_changed_except = $(if $(call newer_prereqs_except,$(2))$(cmd-check),      \
 $(modules): %.ko: %.o %.mod.o scripts/module.lds $(and $(CONFIG_DEBUG_INFO_BTF_MODULES),$(KBUILD_BUILTIN),$(mixed-build-prefix)vmlinux) FORCE
 	+$(call if_changed_except,ld_ko_o,$(mixed-build-prefix)vmlinux)
 ifdef CONFIG_DEBUG_INFO_BTF_MODULES
-	+$(if $(newer-prereqs),$(call cmd,btf_ko))
+	+$(if $(newer-prereqs),true  # BESTROM skip btf_ko)
 endif
 
 targets += $(modules) $(modules:.ko=.mod.o)
@@ -81,3 +75,4 @@ existing-targets := $(wildcard $(sort $(targets)))
 -include $(foreach f,$(existing-targets),$(dir $(f)).$(notdir $(f)).cmd)
 
 .PHONY: $(PHONY)
+
