@@ -1695,4 +1695,12 @@ config VIRTIO_REGULATOR
 	  regulator for pass through peripheral devices via regulator backend in
 	  host.
 
+
+config REGULATOR_WL2866D
+	tristate "WL2866D regulator support"
+	depends on I2C
+	default n
+	help
+	  Enable support for the WL2866D regulator used by Xiaomi boards.
+
 endif

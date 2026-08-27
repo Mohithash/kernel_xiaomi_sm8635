@@ -201,3 +201,6 @@ obj-$(CONFIG_REGULATOR_QTI_OCP_NOTIFIER) += qti-ocp-notifier.o
 obj-$(CONFIG_VIRTIO_REGULATOR) += virtio_regulator.o
 obj-$(CONFIG_REGULATOR_SPM) += spm-regulator.o
 ccflags-$(CONFIG_REGULATOR_DEBUG) += -DDEBUG
+
+# BestROM: restore Xiaomi WL2866D camera regulator (dropped by Theettam kernel swap)
+obj-$(CONFIG_REGULATOR_WL2866D) += wl2866d.o

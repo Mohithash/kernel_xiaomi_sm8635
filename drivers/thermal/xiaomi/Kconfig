@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# Xiaomi thermal drivers configuration
+#
+
+config MI_THERMAL_INTERFACE
+	tristate "xiaomi thermal control interface"
+	depends on THERMAL
+	default n
+	help
+	  This is xiaomi thermal control interface.
+
+config MI_THERMAL_MULTI_CHARGE
+	tristate "enable multi charge themral interface"
+	help
+	  Enable multi charge function in kernel, add two sysfs nodes in
+	  thermal_message.
+
+config MI_THERMAL_ATC_ENABLE
+	tristate "enable atc enable themral interface"
+	help
+	  Enable atc enable function in kernel, add two sysfs nodes in
+	  thermal_message.
+
+config HAVE_MULTI_SCREEN
+	bool "Have multi screen"
+	default n
+	help
+		Enable register two screen in driver

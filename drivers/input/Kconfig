@@ -204,5 +204,7 @@ source "drivers/input/gameport/Kconfig"
 
 endmenu
 
+source "drivers/input/fingerprint/Kconfig"
+
 endmenu
 

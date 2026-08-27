@@ -5,6 +5,8 @@ UTS_MACHINE=$1
 CC_VERSION="$2"
 LD=$3
 
+: "${KBUILD_BUILD_USER:=build}"
+: "${KBUILD_BUILD_HOST:=localhost}"
 if test -z "$KBUILD_BUILD_USER"; then
 	LINUX_COMPILE_BY=$(whoami | sed 's/\\/\\\\/')
 else
