@@ -223,9 +223,13 @@ KREL="$(cat "$OUT/include/config/kernel.release")"
 # every export CRC in Module.symvers against the baseline recorded from the
 # boot-tested build of this flavor.
 KMI_BASE="scripts/ci/kmi-baseline/$FLAVOR.symvers"
+# Optional allowlist of CRC shifts a device has already booted through with the
+# stock vendor_dlkm (symbol + new CRC + evidence). Absent on a branch = strict.
+KMI_ACCEPTED="${KMI_ACCEPTED:-scripts/ci/kmi-baseline/accepted-drift.txt}"
 if [ -f "$KMI_BASE" ]; then
-  if scripts/ci/symvers-diff.sh "$KMI_BASE" "$OUT/Module.symvers" > "$OUT/kmi-diff.txt" 2> "$OUT/kmi-summary.txt"; then
+  if scripts/ci/symvers-diff.sh "$KMI_BASE" "$OUT/Module.symvers" "$KMI_ACCEPTED" > "$OUT/kmi-diff.txt" 2> "$OUT/kmi-summary.txt"; then
     log "KMI gate: $(cat "$OUT/kmi-summary.txt") vs $KMI_BASE"
+    grep -q '^ACCEPTED' "$OUT/kmi-diff.txt" && { log "KMI gate: accepted (boot-verified) CRC shifts from $KMI_ACCEPTED:"; grep '^ACCEPTED' "$OUT/kmi-diff.txt"; }
   else
     head -40 "$OUT/kmi-diff.txt"; cat "$OUT/kmi-summary.txt"
     die "KMI CRC drift against the boot-tested baseline $KMI_BASE (full list: $OUT/kmi-diff.txt). This Image would not load the stock vendor modules."
