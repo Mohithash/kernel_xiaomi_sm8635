@@ -18,7 +18,7 @@ snapshot branch and was deliberately not carried into 2.7.)
 
 | Vector | Status |
 |---|---|
-| `/proc/config.gz` leaking `CONFIG_KSU` | Closed since 2.7 — `IKCONFIG_PROC` off (`IKCONFIG` stays on so `scripts/extract-ikconfig` still works on the Image). 2.6 and earlier exposed it |
+| `/proc/config.gz` leaking `CONFIG_KSU` | Closed since 2.7 — the node stays (Android's `system_server` reads it and the device bootloops without it, see `26c9dbf69240`) but every `CONFIG_KSU*`/`CONFIG_KPM` line is scrubbed from the embedded config at build time (`kernel/Makefile`, `filechk_ikconfig`). 2.6 and earlier exposed `CONFIG_KSU=y` |
 | Custom version string, `+` suffix | Stock GKI `LOCALVERSION` (`-android14-11-ga3b9c44908dd-ab13320413`); `LOCALVERSION_AUTO=n` removes the `+` |
 | Build user/host in `/proc/version` | `build@localhost` (set by CI and by `scripts/ci/build-flavor.sh`) |
 | `uname()` for Play Services | `CONFIG_UNAME_OVERRIDE` serves `com.google.android.gms` the stock `6.1.118-android14-11-ga3b9c44908dd-ab13320413` string |

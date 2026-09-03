@@ -144,10 +144,14 @@ targets += config_data config_data.gz
 $(obj)/config_data.gz: $(obj)/config_data FORCE
 	$(call if_changed,gzip)
 
-filechk_cat = cat $<
+# /proc/config.gz must exist: Android's system_server reads it
+# (Debug.isVmapStack, b/151092221) and the device bootloops without it
+# (26c9dbf69240). Ship it, but without the root-driver lines: an app that
+# reads it sees a stock-looking GKI config instead of CONFIG_KSU=y.
+filechk_ikconfig = grep -vE '^(# )?CONFIG_(KSU|KPM)([_=]| )' $<
 
 $(obj)/config_data: $(KCONFIG_CONFIG) FORCE
-	$(call filechk,cat)
+	$(call filechk,ikconfig)
 
 $(obj)/kheaders.o: $(obj)/kheaders_data.tar.xz
 

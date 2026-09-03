@@ -154,7 +154,7 @@ symbol ships without appearing in a defconfig, and a defconfig line can be overr
 | 🎭 | **Stock GKI version string** | Reports `6.1.175-android14-11-…` — no custom kernel branding |
 | 🔓 | **`MODULE_SIG=n`** | So KernelSU-family modules load |
 | 🛡 | **7 root flavors, SUSFS v2.2.0 on five** | 6 KSU-family + APatch. Including KernelSU-Next v3.3.0 + SUSFS — a pairing that doesn't exist upstream |
-| 🔒 | **`/proc/config.gz` closed** | `IKCONFIG_PROC` off since 2.7 — the config no longer advertises `CONFIG_KSU` to apps (2.6 and earlier exposed it) |
+| 🔒 | **`/proc/config.gz` scrubbed** | Since 2.7 the embedded config carries no `CONFIG_KSU*` lines, so apps reading it see a stock GKI config (2.6 and earlier exposed `CONFIG_KSU=y`). The node itself stays: `system_server` needs it |
 | 🧱 | **KMI gate in CI** | Every flavor's exported-symbol CRCs are diffed against the boot-tested baseline before a zip exists — the check that catches compile-clean bootloops |
 
 ### Inherited from the device base
