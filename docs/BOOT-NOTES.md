@@ -444,15 +444,26 @@ an Image-only flash (Rule 7) cannot deliver it, however loud the bulletin.
   Checked and deliberately not proposed: `INIT_ON_FREE_DEFAULT_ON` (off in
   ACK too, real runtime cost) and `SECURITY_DMESG_RESTRICT` (off in ACK,
   Android sets the sysctl anyway).
-- **Open, needs the rooted probe: `BPF_UNPRIV_DEFAULT_OFF`.** The one
-  KMI-neutral knob the tree lacks. It is a one-way latch (initialises
-  `unprivileged_bpf_disabled` to 2, which cannot be lowered) and ACK leaves it
-  unset, so it is only worth taking if the ROM does *not* already write 1/2 by
-  sysctl. `scripts/device/postflash-check.sh` (`hardening-sysctls`, root-gated)
-  and `device-probe.sh` now read `unprivileged_bpf_disabled`, `kptr_restrict`,
-  `dmesg_restrict` and `bpf_jit_harden`; Android hides them from an
-  unprivileged shell, so this waits for a rooted boot. If the value is
-  already 1 or 2, close the item.
+- **Closed, no-op on Android: `BPF_UNPRIV_DEFAULT_OFF`.** The rooted probe
+  read `unprivileged_bpf_disabled=0` and dmesg carries "WARNING: Unprivileged
+  eBPF is enabled, data leaks possible via Spectre v2 BHB attacks!" at 6.6 s.
+  Flipping the config and booting it changed nothing: the value still read 0
+  and the notice still printed, because the notice is emitted on the
+  *sysctl write* and the write comes from Android itself: it lands right
+  after `NetBpfLoad` (`/apex/com.android.tethering/bin/netbpfload`, uid 0,
+  whose binary contains the `/proc/sys/kernel/unprivileged_bpf_disabled`
+  path) on every boot. The config's default is 2, which root may lower; only
+  1 is the one-way latch, and forcing 1 would fight the platform's BPF
+  loader. Leave it unset, as ACK does. Recorded so nobody flips it again on
+  the strength of the dmesg line.
+- **Expected BTF noise on every boot: ~250 `BPF: [<id>] Invalid
+  name_offset:<n>` lines at 0.16 s and "Kernel module BTF mismatch detected,
+  BTF debug info may be unavailable for some modules".** That is the stock
+  `vendor_dlkm` modules' split BTF (generated against Xiaomi's vmlinux)
+  failing to attach to ours; `/sys/kernel/btf/vmlinux` itself loads (5.7 MB)
+  and module BTF only matters for tracing on module types. Inherent to
+  Image-only flashing with stock modules, not a regression, and unrelated to
+  the `DEBUG_INFO_BTF=n` breakage in Rule 0 (that removed vmlinux BTF).
 
 ---
 **TL;DR for a bootable build:** start from `theettam-2.7`, change nothing in the
