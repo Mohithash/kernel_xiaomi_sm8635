@@ -228,12 +228,27 @@ a field to `struct mem_section`, whose CRC vendor modules can depend on. Leave
 it on; it is a compile-time-only cost unless `page_owner=on` is set on the
 cmdline (it is not).
 
-**Deferred, needs on-device data before a decision (`scripts/device/device-probe.sh`
-answers the first one):** which `cpuidle` governor is actually live (`menu`
-wins over `teo` by rating unless the vendor's `qcom-cpu-lpm` governor is
-loaded, which would make the Image's choice moot); whether Android tick-rate
-assumptions in vendor `vendor_dlkm` modules expect `HZ=250` (LineageOS
-default) vs this tree's `HZ=300`.
+**Answered on device (2026-09-03, `scripts/device/device-probe.sh` on the
+lts176 plain flavor, unprivileged reads):**
+- `cpuidle` governor live is the vendor's **`qcom-cpu-lpm`** (`available_governors:
+  menu teo qcom-cpu-lpm`, LPM module loaded). The Image's `menu`/`teo` choice is
+  moot on peridot; do not spend effort there.
+- `HZ=300` is what runs (`/proc/config.gz`: `CONFIG_HZ_300=y`, `NO_HZ_IDLE`), and
+  the full stock `vendor_dlkm` set (445 modules) loads against it. The
+  "vendor modules expect HZ=250" worry is retired.
+- MTE is **off at boot**: stock cmdline carries `kasan=off`
+  (`kasan.page_alloc.sample=10 kasan.stacktrace=off` too) and `mte` is absent
+  from `/proc/cpuinfo`. `CONFIG_KASAN_HW_TAGS=y` stays only because GKI/KMI
+  wants it compiled in; it costs nothing at runtime here.
+- cpufreq governor is vendor `walt` on all three policies (cmdline's
+  `cpufreq.default_governor=performance` is overridden by init); MGLRU is on
+  (`lru_gen/enabled: 0x0003`); THP is `[never]`; `/data` is f2fs with
+  `atgc,age_extent_cache,fsync_mode=nobarrier,lookup_mode=perf`.
+- Still root-gated on Android (permission denied unprivileged): the live
+  block-queue scheduler (`/sys/block/sda/queue/scheduler`), DAMON runtime
+  enables, `watchdog_thresh`, `sync_on_suspend`, and `dmesg` itself
+  (`dmesg_restrict`). Re-run the probe with `su -c` on a rooted flavor to
+  close those out.
 
 **Deferred, out of scope for the kernel tree:** on-device idle/battery A/B
 tests (I/O scheduler choice, softlockup watchdog period, `sync_on_suspend`)
@@ -299,6 +314,18 @@ grafts onto, so those flavors weren't independently re-validated against 176):
   key-manager registration. Judged safe by this reasoning, **not** by an
   actual boot — that judgment call is exactly why this stays off
   `theettam-2.7` until a device confirms it.
+- **Boot record, 2026-09-03 — the plain (no-root) lts176 flavor boots on a
+  peridot (24069PC21I, HyperOS-based ROM `peridot:24.0-20260829-UNOFFICIAL`).**
+  Verified without root over `adb`: `uname -r` =
+  `6.1.176-android14-11-ga3b9c44908dd-ab13320413`, 445 vendor modules loaded
+  (same count as the 175 baseline), display/touch/wifi/bt/audio/GPU up, RIL
+  alive (modem scans cells, so the qrtr/ipc merge resolution works at least
+  that far), 42+ min uptime with load ~1.3 and no visible misbehaviour.
+  **Not verified yet**: `dmesg` (klogctl is root-only on Android, so "no
+  oops/`disagrees about version`" is unconfirmed — the plain flavor has no
+  `su`), and **VoLTE/IMS could not be tested because no SIM was inserted**
+  (`gsm.sim.state=[ABSENT,ABSENT]`; the OUT_OF_SERVICE state is that, not a
+  kernel fault). Both need the rooted flavor + a SIM before promotion.
 - **Considered and not ported**: upstream's DAMON_RECLAIM/DAMON_LRU_SORT
   "fresh status" fix (`2f54908fae21`/`2f32fb0e0c32` — a kdamond that stops
   itself on bad input or an allocation failure can't be restarted before
