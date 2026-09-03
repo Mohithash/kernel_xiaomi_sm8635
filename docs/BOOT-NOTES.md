@@ -299,6 +299,19 @@ grafts onto, so those flavors weren't independently re-validated against 176):
   key-manager registration. Judged safe by this reasoning, **not** by an
   actual boot — that judgment call is exactly why this stays off
   `theettam-2.7` until a device confirms it.
+- **Considered and not ported**: upstream's DAMON_RECLAIM/DAMON_LRU_SORT
+  "fresh status" fix (`2f54908fae21`/`2f32fb0e0c32` — a kdamond that stops
+  itself on bad input or an allocation failure can't be restarted before
+  reboot). Both commits are technically ancestors of `android14-6.1.176_r00`,
+  but their actual change to `mm/damon/reclaim.c`/`lru_sort.c` isn't present
+  at the 176 tag's tip — some later ACK merge kept ACK's own version instead
+  — and the fix calls `damon_is_running()`, which doesn't exist anywhere in
+  our tree *or* in ACK 176 itself. Porting it needs chasing down that missing
+  helper too, not just two file diffs as it first looked. Low urgency:
+  `DAMON_RECLAIM`/`DAMON_LRU_SORT` are disabled at runtime by default
+  (`/sys/module/damon_reclaim/parameters/enabled` — verify with
+  `scripts/device/device-probe.sh`), so the bug has zero effect unless
+  something (the Theettam Tweaks module) explicitly enables them.
 
 ---
 **TL;DR for a bootable build:** start from `theettam-2.7`, change nothing in the
