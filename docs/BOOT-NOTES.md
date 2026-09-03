@@ -72,7 +72,11 @@ check that catches them. The symbols that shifted in the two documented bootloop
 
 When a change is *meant* to move a CRC (it never is, for an Image-only kernel that
 keeps stock `vendor_dlkm`), regenerate the baseline from a build that has been
-boot-tested, in the same commit, and say so.
+boot-tested, in the same commit, and say so. For a shift a device has already
+booted through but whose flavor baselines are not all re-recorded yet (the ACK
+176 `xfrm_*_km` case), list it with its new CRC and the boot evidence in
+`scripts/ci/kmi-baseline/accepted-drift.txt` on that branch; the gate reports
+it as `ACCEPTED` and keeps failing on everything else.
 
 ## Rule 3 — two mandatory post-merge fixes (or it won't compile/boot)
 
