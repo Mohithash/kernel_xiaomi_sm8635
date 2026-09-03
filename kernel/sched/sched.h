@@ -2397,6 +2397,10 @@ extern void init_sched_fair_class(void);
 extern void set_load_weight(struct task_struct *p, bool update_load);
 extern void reweight_task(struct task_struct *p, int prio);
 
+#ifdef CONFIG_SCHED_BORE
+extern u8 sched_bore;
+#endif
+
 extern void resched_curr(struct rq *rq);
 extern void resched_cpu(int cpu);
 

@@ -1298,6 +1298,23 @@ void set_load_weight(struct task_struct *p, bool update_load)
 	int prio = p->static_prio - MAX_RT_PRIO;
 	struct load_weight *load = &p->se.load;
 
+#ifdef CONFIG_SCHED_BORE
+	/*
+	 * Apply BORE's burst-score penalty here too, not just from
+	 * update_burst_score(): nice()/sched_setattr() land here via
+	 * set_user_nice()/__setscheduler_params() and reweight the task
+	 * using only static_prio, silently discarding se.burst_score. Since
+	 * update_burst_score() only reweights on a burst_score CHANGE, a
+	 * hog whose score hasn't ticked since the syscall runs un-penalised
+	 * until its next natural score update (seconds, given the
+	 * logarithmic penalty curve) -- exactly when Android's frequent
+	 * Process.setThreadPriority() calls on fg/bg transitions matter
+	 * most. Mirrors fair.c's effective_prio() formula.
+	 */
+	if (update_load && likely(sched_bore))
+		prio = min(39, prio + p->se.burst_score);
+#endif
+
 	/*
 	 * SCHED_IDLE tasks get minimal weight:
 	 */
