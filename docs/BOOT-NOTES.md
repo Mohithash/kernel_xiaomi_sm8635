@@ -136,7 +136,7 @@ this tree carry, with no stated reason. Each was assessed against this tree:
 | Patch | 2.7 decision | Why |
 |---|---|---|
 | `fork: fix double-free on task_struct` (`fcc2501b`) + `…of signal_struct` (`00883cb4`) | **reverted in 2.7** (GuidixX's `497b5dd9` + `cd40a6c5`, cherry-picked in that order) | The pair replaces `delayed_free_task()` with `put_task_struct()` on the copy_process() failure path, which runs the exit-time teardown on a child that still holds the parent's cred/signal/cgroup/dmabuf pointers: WARN on every failed clone, and unbalanced puts on the parent's creds, signal_struct, css_set and dmabuf accounting (a fatal signal racing pthread_create is enough). Two independent reviews confirmed; restores byte-identical ACK 6.1.175 code. Reverted together, as required. |
-| `f2fs: Demote GC thread to idle scheduler class` | keep (needs device data) | Boot-safe either way; with `GC_MERGE` on, foreground GC waits on this thread, so SCHED_IDLE can stall writers under CPU load — but no field evidence yet. Decide with the ATGC/GC_MERGE item. |
+| `f2fs: Demote GC thread to idle scheduler class` | **reverted in 2.7** (GuidixX's `7e10766b`, cherry-picked) | With `GC_MERGE` on (kept, see below), foreground GC — where an app's write blocks in `TASK_UNINTERRUPTIBLE` until the GC kthread finishes — is executed by that same kthread; demoting it to `SCHED_IDLE` is a real priority inversion under CPU load, exactly when the fstab-mandated `GC_MERGE` needs it to run. The `IOPRIO_CLASS_IDLE` call from the same original patch stays (I/O-level deprioritization, no CPU-scheduling-class problem). |
 | `f2fs: Enable ATGC and GC_MERGE by default` | keep | No KMI effect, every upstream follow-up fix is already in the tree, boot-tested v2.0–v2.6 — and moot on peridot: the ROM fstab already mounts /data with `atgc,gc_merge`. |
 | `af_unix: GC cleanup and optimisation` | keep | Matches mainline 6.19 garbage.c; no exports touched; upstream never reverted it. |
 | `sched: Make set_load_weight externally visible` | keep | Linkage-only no-op; nothing exported. |
@@ -146,6 +146,97 @@ this tree carry, with no stated reason. Each was assessed against this tree:
 None of these touch an exported symbol or a KMI struct; the decisions are about
 correctness and behaviour, not boot safety, and every 2.7 build is still KMI-diffed
 against the v2.6 baseline.
+
+---
+## Rule 9 — other correctness fixes taken in 2.7 (verified, not just proposed)
+
+- **`kernel: sched: schedutil: Adjust frequency scaling ratio` reverted.** The
+  patch discarded `next_freq` from the Android vendor governor hook
+  (`trace_android_vh_map_util_freq`) and replaced it with an unconditional
+  `freq = map_util_freq(...) * 3 / 4` — a flat 25% cut applied to *every*
+  frequency decision, not "similar utilization" as claimed, and it fights
+  BORE + uclamp's whole point of giving bursty UI work full frequency.
+  Reverted to stock `get_next_freq()`. Local calculation only, no KMI impact.
+- **Boeffla wakelock blocker's compiled-in default list emptied.**
+  `LIST_WL_DEFAULT` (`drivers/base/power/boeffla_wl_blocker.h`) shipped with
+  the real IPA/RMNET/`hal_bluetooth_lock` list despite the enabling commit's
+  message claiming it was empty. `boeffla_wl_blocker_init()` bakes it into
+  `list_wl_search` at boot regardless of `wl_blocker_active`; the moment
+  anything (the Theettam Tweaks module's screen-off trip) flips the blocker on
+  without first overwriting the list via sysfs, modem/data/bluetooth
+  wakelocks get blocked — precisely the VoLTE/data risk this fork has hit
+  before. Now genuinely empty.
+- **`CONFIG_KFENCE_DEFERRABLE=y` added.** KFENCE's 500ms sampling timer was a
+  non-deferrable `delayed_work`, forcing a CPU wake every cycle even at idle.
+  Real upstream Kconfig option (`lib/Kconfig.kfence`), no KMI impact.
+- **Dead ThinLTO linker flag removed** (`Makefile`, guarded by
+  `CONFIG_LTO_CLANG_THIN` which this tree never sets — inert either way, but
+  wrong on its own terms: `--thinlto-cache-dir` isn't a flag LLD's kernel
+  link step understands and `$(nproc --all)` is evaluated at Makefile-parse
+  time on whatever machine runs the build, not a real per-build tunable).
+
+**Considered and explicitly rejected** (verified against real ACK/GuidixX
+history, not implemented): disabling `IKHEADERS`, `HEADERS_INSTALL`,
+`PID_IN_CONTEXTIDR`, or UBSAN — all match Google's own ACK android14-6.1.175
+`gki_defconfig` value; deviating for a build-time-only or negligible-runtime
+saving breaks this tree's "match ACK's own considered defaults" philosophy
+for no real benefit. `CONFIG_PM_WAKELOCKS_LIMIT=10` (ACK ships `0`) was
+**not** touched: it is already the value on `guidixx/16.2` itself, i.e. part
+of the device base, not a Theettam deviation — changing it needs a reason
+beyond "differs from generic ACK". `-O3`, `-mcpu=`, and Polly are rejected
+for release Images (ThinLTO is a separate, symvers-gated experiment only,
+never for releases): compiler-flag changes never move a genksyms CRC (hash of
+preprocessed source, not codegen) so the KMI gate cannot validate them at all
+— any such experiment needs its own boot test.
+
+**KMI-locked, do not retry disabling:** `CONFIG_PAGE_OWNER` /
+`CONFIG_PAGE_PINNER` (→ `CONFIG_PAGE_EXTENSION`). This was tried twice before
+(`ce1467042a5f` disabled it for battery, `1895162f6183` re-enabled it as a
+"suspected" boot breaker) without ever confirming why. It is a real KMI break:
+`mm/page_owner.c` exports `page_owner_inited` etc., and `PAGE_EXTENSION` adds
+a field to `struct mem_section`, whose CRC vendor modules can depend on. Leave
+it on; it is a compile-time-only cost unless `page_owner=on` is set on the
+cmdline (it is not).
+
+**Deferred, needs on-device data before a decision:** which `cpuidle`
+governor is actually live (`menu` wins over `teo` by rating unless the
+vendor's `qcom-cpu-lpm` governor is loaded, which would make the Image's
+choice moot — check `/sys/devices/system/cpu/cpuidle/current_governor_ro`
+first); whether Android tick-rate assumptions in vendor `vendor_dlkm` modules
+expect `HZ=250` (LineageOS default) vs this tree's `HZ=300`; the BORE
+`set_load_weight()`/burst-score interaction with `nice()`/`sched_setscheduler()`.
+
+**Deferred, out of scope for the kernel tree:** on-device idle/battery A/B
+tests (I/O scheduler choice, softlockup watchdog period, `sync_on_suspend`)
+belong in the Theettam Tweaks userspace module as runtime sysctls, not a
+kernel default — they are reversible without a new flash there.
+
+## Rule 10 — pending: ACK android14-6.1.176 bump
+
+`android14-6.1.176_r00` exists upstream, 639 commits ahead of our 175 base
+(`git rev-list --count android14-6.1.175_r00..android14-6.1.176_r00`). A real
+trial merge (`git merge --no-commit --no-ff android14-6.1.176_r00`, then
+`git merge --abort`) found only **3 conflicting files**, 503+ auto-merged
+cleanly:
+
+- `drivers/slimbus/qcom-ngd-ctrl.c` — small, localized hunks.
+- `net/qrtr/af_qrtr.c` — one hunk: our side keeps a `qrtr_port_lock` spinlock
+  (used consistently at 4 call sites in the file) around `qrtr_port_remove()`;
+  176 replaces it with `xa_erase()` + `synchronize_rcu()` and drops the lock
+  at this one site. Taking 176's side here without converting the other 3
+  sites would leave an inconsistent locking model — do not resolve this
+  hunk-by-hunk without reading the whole file's locking scheme first.
+- `net/qrtr/ns.c` — **not a simple conflict**: our side runs the qrtr
+  name-service worker on a dedicated realtime `kthread_worker`/`task_struct`
+  (a common Qualcomm technique for QRTR/RPM IPC priority); 176 replaces it
+  with a generic `workqueue_struct` + `lookup_count`. These are two different
+  implementations, not a line-level disagreement — reconciling them means
+  understanding every call site that touches `qrtr_ns.work`/`.task`/`.kworker`.
+  qrtr carries modem/RPM IPC, and this fork has broken VoLTE from changes in
+  adjacent areas before (BTF, the premium PELT experiment). **Do not attempt
+  this merge without deep, unhurried review of `net/qrtr/ns.c` and a real
+  device boot test on the result** — it is well-scoped (3 files) but not
+  mechanical.
 
 ---
 **TL;DR for a bootable build:** start from `theettam-2.7`, change nothing in the
