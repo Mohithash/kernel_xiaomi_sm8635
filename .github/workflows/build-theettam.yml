@@ -55,9 +55,11 @@ jobs:
       flavors: ${{ steps.m.outputs.flavors }}
     steps:
       - id: m
+        env:
+          APATCH_SUPERKEY: ${{ inputs.apatch_superkey }}
         run: |
           F='"ksun-plain","ksun-susfs","sukisu-susfs","ksun-susfs-droidspaces","resukisu-susfs","premium"'
-          if [ -n "${{ inputs.apatch_superkey }}" ]; then F="$F,\"apatch\""; else echo "::notice::APatch flavor skipped (no superkey supplied)"; fi
+          if [ -n "$APATCH_SUPERKEY" ]; then F="$F,\"apatch\""; else echo "::notice::APatch flavor skipped (no superkey supplied)"; fi
           echo "flavors=[$F]" >> "$GITHUB_OUTPUT"
 
   build:
