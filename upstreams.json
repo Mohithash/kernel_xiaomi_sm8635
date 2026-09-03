@@ -44,8 +44,16 @@
     "kind": "gitlab-branch",
     "project": "simonpunk/susfs4ksu",
     "branch": "gki-android14-6.1",
-    "current": "090cf407fea14d960cba55ce6f69cc61a146d1b3",
-    "note": "v2.2.0 + Jul 23 OPEN_REDIRECT UAF/leak/deadlock fixes. The hand-port grafts susfs's CMD dispatch into the driver's reboot kprobe; a susfs bump can move the anchors, so scripts/susfs/integrate*.sh may need work.",
+    "current": "4fc9c1898ea66f51847cdbc0d1473ea4ef525a70",
+    "note": "v2.3.0: zygote_next umount-inheritance mitigation, open_redirect hook moved to path_openat()/do_tmpfile()/do_o_path() for correct SRCU scope, a sleepable static_key WARN fix. The hand-port grafts susfs's CMD dispatch into the driver's reboot kprobe; a susfs bump can move the anchors, so scripts/susfs/integrate*.sh may need work.",
     "pins_env": "SUSFS_PIN"
+  },
+  "kernelpatch": {
+    "name": "KernelPatch (bmax121, APatch flavor)",
+    "kind": "github-tags",
+    "repo": "bmax121/KernelPatch",
+    "current": "0.13.8",
+    "note": "kptools/kpimg are also sha256-pinned in scripts/ci/pins.env (KPTOOLS_SHA256/KPIMG_SHA256) — a version bump here needs both the version AND both checksums updated together.",
+    "pins_env": "KP_VERSION"
   }
 }
