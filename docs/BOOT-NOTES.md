@@ -304,6 +304,86 @@ grafts onto, so those flavors weren't independently re-validated against 176):
   actual boot — that judgment call is exactly why this stays off
   `theettam-2.7` until a device confirms it.
 
+## Rule 11 — security review against ACK past 176 (2026-09-03): what was taken, what was refused, and why
+
+Scoped to code that is actually **linked into the Image** (`=y`). Anything that
+lives in a stock `vendor_dlkm`/`system_dlkm` module is Xiaomi's to fix via OTA;
+an Image-only flash (Rule 7) cannot deliver it, however loud the bulletin.
+
+- **Taken: `39905027d023` "ANDROID: netfilter: xt_quota2: fix UAF in
+  q2_get_counter error path"** (Todd Kjos, ACK android14-6.1-lts just past
+  176, Bug 499166786). `xt_quota2` is Android's own per-UID accounting match
+  and is `=y` here, so it is in the Image. The bug: the new counter is put on
+  `counter_list` and the lock dropped before `proc_create_data()`; if that
+  fails, the old error path did `list_del()`+`kfree()` unconditionally while
+  another thread could already hold a reference. Needs CAP_NET_ADMIN and a
+  procfs allocation failure, so not an app-level bug, but the fix is three
+  lines of refcount discipline with no struct or export change (KMI gate:
+  `changed=0`). On both `theettam-2.7` and `theettam-2.7-lts176`.
+- **Refused: the fscrypt trio** `c3e0109ec5e6` (avoid dynamic allocation in
+  `fscrypt_get_devices`), `2fd20b5fee78` (replace `mk_users` keyring with a
+  list), `f20ce2195cc1` (key setup with multiple data unit sizes). fscrypt is
+  very much in this Image (`FS_ENCRYPTION`, inline crypt) and the third one
+  reads like a correctness fix worth having. It is a trap: ACK could only land
+  them by filing a declared ABI break (`c0df533a5806` adds them to
+  `abi_gki_aarch64.stg.allowed_breaks`: `struct fscrypt_master_key` shrinks
+  from 872 to 368 bytes, and `struct fscrypt_operations` gains
+  `get_devices_new` by **consuming `android_kabi_reserved1`**). That struct is
+  embedded in every encrypting filesystem's superblock ops; Google absorbs it
+  by rebuilding the whole device image, we flash Image only. Never for this
+  fork, unless a full LTS bump Google has shipped to peridot carries it.
+- **Kept against ACK's revert: `47455f9704a1` "usb: gadget: udc: fix UAF in
+  usb_gadget_state_work (KABI-safe)"**, which 176 carries and ACK later
+  reverted as `e70cf19d88cf`. The revert's own reason is "presubmit failures
+  when backported to 6.12", to be replaced by an internal teardown flag in
+  `struct usb_udc`: a 6.12 build problem plus a refactor plan, not a 6.1
+  runtime regression, and both versions are explicitly KABI-safe. The path is
+  hot on peridot (`usb_gadget_set_state`/`usb_udc_vbus_handler` are exports
+  the dwc3 vendor module hits on every cable event) and the 176 build with it
+  booted. Do not "sync" this revert; re-evaluate when ACK lands the flag.
+- **ASB-2026-08-03_14-6.1: nothing for us.** It is nine commits past 176;
+  seven are vendor hooks/symbol lists/a kernel-doc fix. The two real fixes,
+  `cad04476381e` + `b178698e5ac5` (Bluetooth SCO sleeping-under-spinlock and
+  `sco_conn_ready` UAF), are `net/bluetooth/sco.c` only, and `CONFIG_BT=m`:
+  that code is `bluetooth.ko` in stock `system_dlkm`. Cherry-picking them
+  changes nothing on the phone; the device gets them from Xiaomi's OTA.
+- **Qualcomm bulletins (Jun–Sep 2026): no actionable item, structurally.**
+  The complete Qualcomm-authored code in this Image is `ARCH_QCOM` plumbing
+  plus `PCIE_QCOM`, `INTERCONNECT_QCOM`, `QCOM_GDSC`, `QCOM_GENI_SE`,
+  `SERIAL_QCOM_GENI`, `QCOM_SMEM_STATE`, `QCOM_EBI2`, SPMI regmap,
+  `USB_DWC3_QCOM`, the SCMI transports and the Gunyah core; there is not one
+  `CONFIG_*QCOM*=m`/`*MSM*=m`. KGSL, camera, display, audio, WLAN, IPA/rmnet,
+  video, qseecom, fastrpc are all vendor modules, which is where Qualcomm's
+  kernel CVEs overwhelmingly land (e.g. CVE-2026-21385, KGSL, "limited,
+  targeted exploitation": `msm_kgsl.ko`, untouchable from here). Even `QRTR`
+  and `SLIMBUS` are not set, so the hand-resolved 176 merge conflicts in
+  `net/qrtr` and `drivers/slimbus` (Rule 10) affect no shipped code. The
+  per-CVE bulletin tables could not be read (client-side rendered); the
+  attack-surface list above is the verifiable statement.
+- **Hardening audit vs ACK 176 `gki_defconfig`: parity, nothing to flip.**
+  The full defconfig delta is 97 lines and the only security-relevant ones are
+  `MODULE_SIG`/`MODULE_SIG_PROTECT` off (the deliberate KernelSU accommodation:
+  anything with CAP_SYS_MODULE can insmod, inherent to a root kernel) and our
+  `KFENCE_DEFERRABLE=y`. Present and identical to ACK: `CFI_CLANG` (permissive
+  off), `SHADOW_CALL_STACK`, `KASAN_HW_TAGS`, `INIT_ON_ALLOC_DEFAULT_ON`,
+  `INIT_STACK_ALL_ZERO`, `HARDENED_USERCOPY`, `SLAB_FREELIST_RANDOM`/`HARDENED`,
+  `STACKPROTECTOR_STRONG`, `RANDOMIZE_BASE`, `FORTIFY_SOURCE`, `UBSAN_BOUNDS`
+  (+trap), `BUG_ON_DATA_CORRUPTION`, `DEBUG_LIST`, `STRICT_KERNEL_RWX`/
+  `MODULE_RWX`, `VMAP_STACK`, PAN/E0PD/EPAN/`UNMAP_KERNEL_AT_EL0`, pointer
+  auth, `STATIC_USERMODEHELPER`, `DEVMEM`/`PROC_KCORE` off, `SECCOMP_FILTER`.
+  Checked and deliberately not proposed: `INIT_ON_FREE_DEFAULT_ON` (off in
+  ACK too, real runtime cost) and `SECURITY_DMESG_RESTRICT` (off in ACK,
+  Android sets the sysctl anyway).
+- **Open, needs the rooted probe: `BPF_UNPRIV_DEFAULT_OFF`.** The one
+  KMI-neutral knob the tree lacks. It is a one-way latch (initialises
+  `unprivileged_bpf_disabled` to 2, which cannot be lowered) and ACK leaves it
+  unset, so it is only worth taking if the ROM does *not* already write 1/2 by
+  sysctl. `scripts/device/postflash-check.sh` (`hardening-sysctls`, root-gated)
+  and `device-probe.sh` now read `unprivileged_bpf_disabled`, `kptr_restrict`,
+  `dmesg_restrict` and `bpf_jit_harden`; Android hides them from an
+  unprivileged shell, so this waits for a rooted boot. If the value is
+  already 1 or 2, close the item.
+
 ---
 **TL;DR for a bootable build:** start from `theettam-2.7`, change nothing in the
 KMI, keep the two post-merge fixes and the reverts, use the pins in
