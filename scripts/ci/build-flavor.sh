@@ -35,6 +35,7 @@
 #   SKIP_ZIP=1    do not package
 #   USE_CCACHE=0  do not wrap clang in ccache even if installed
 #   KMI_STRICT=1  fail if scripts/ci/kmi-baseline/<flavor>.symvers is missing (CI sets this)
+#   ALLOW_OTHER_CLANG=1  skip the pinned-toolchain check (deliberate compiler experiments only)
 set -euo pipefail
 
 FLAVOR="${1:-}"
@@ -76,6 +77,9 @@ esac
 # ---- preconditions ----------------------------------------------------------
 have clang || die "clang not in PATH (CLANG_DIR=$CLANG_DIR)"
 log "flavor=$FLAVOR  clang: $(clang --version | head -1)"
+if [ "${ALLOW_OTHER_CLANG:-0}" != 1 ]; then
+  clang --version | head -1 | grep -qF "$NEUTRON_CLANG_ID" || die "clang is not the pinned release toolchain ($NEUTRON_CLANG_ID, build $NEUTRON_BUILD); set CLANG_DIR to it or ALLOW_OTHER_CLANG=1 for a deliberate experiment"
+fi
 grep -q '^SUBLEVEL = 175' Makefile || die "base is not 6.1.175"
 grep -q '^CONFIG_SCHED_BORE=y' arch/arm64/configs/gki_defconfig || die "BORE missing from gki_defconfig"
 grep -q '^CONFIG_MQ_IOSCHED_ADIOS=y' arch/arm64/configs/gki_defconfig || die "ADIOS missing from gki_defconfig"
@@ -188,7 +192,12 @@ make -s -j"$JOBS" O="$OUT" olddefconfig
 
 log "config verification"
 if [ "$ROOT_ENGINE" != none ]; then grep -q '^CONFIG_KSU=y' "$CFG" || die "KSU not enabled"; fi
-for o in SCHED_BORE MQ_IOSCHED_ADIOS DAMON_PADDR DAMON_RECLAIM DAMON_LRU_SORT ZRAM_WRITEBACK BOEFFLA_WL_BLOCKER DEBUG_INFO_BTF; do
+for o in SCHED_BORE MQ_IOSCHED_ADIOS DAMON_PADDR DAMON_RECLAIM DAMON_LRU_SORT ZRAM_WRITEBACK BOEFFLA_WL_BLOCKER DEBUG_INFO_BTF \
+         TCP_CONG_BBR NET_SCH_FQ_CODEL WIREGUARD \
+         NETFILTER_XT_MATCH_QUOTA2 NETFILTER_XT_MATCH_BPF NETFILTER_XT_MATCH_U32 NETFILTER_XT_MATCH_OWNER \
+         NETFILTER_XT_MATCH_POLICY NETFILTER_XT_MATCH_CONNMARK NETFILTER_XT_MATCH_STATE \
+         NETFILTER_XT_TARGET_IDLETIMER NETFILTER_XT_TARGET_NFLOG NETFILTER_XT_TARGET_CONNMARK NETFILTER_XT_TARGET_TCPMSS \
+         NETFILTER_XT_TARGET_MASQUERADE; do
   grep -qE "^CONFIG_$o=(y|m)" "$CFG" || die "CONFIG_$o dropped in olddefconfig"
 done
 if [ "$SUSFS" != none ]; then grep -q '^CONFIG_KSU_SUSFS=y' "$CFG" || die "SUSFS not enabled in .config"; fi
