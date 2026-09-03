@@ -174,6 +174,36 @@ against the v2.6 baseline.
   wrong on its own terms: `--thinlto-cache-dir` isn't a flag LLD's kernel
   link step understands and `$(nproc --all)` is evaluated at Makefile-parse
   time on whatever machine runs the build, not a real per-build tunable).
+- **`set_load_weight()` now applies BORE's burst-score penalty** (previously
+  deferred as needing more time; resolved). `nice()`/`sched_setattr()` call
+  `set_load_weight()`, which only used `static_prio`, discarding
+  `p->se.burst_score` — the exact penalty BORE computes for CPU hogs. The
+  task's weight got reset to un-penalised on every priority-related syscall,
+  and `update_burst_score()` only reweights when its own effective-priority
+  computation *changes*, which it doesn't if `burst_score` hasn't ticked
+  since — so a hog ran un-penalised for seconds after any such call, right
+  when Android's constant `Process.setThreadPriority()` calls on fg/bg
+  transitions matter most. Fix mirrors `fair.c`'s existing `effective_prio()`
+  formula and clamp exactly (no new scheduler policy), gated on `update_load`
+  so it only fires at the two syscall-driven call sites, not at fork time
+  (`kernel/sched/core.c`, `kernel/sched/sched.h` for the `extern u8
+  sched_bore;`). KMI-neutral (no export/struct change), built and KMI-gated
+  on `plain` and `sukisu-susfs`. Needs an on-device UI-responsiveness check
+  under sustained load in addition — this changes live scheduler weight
+  behaviour, unlike the reverts above which restore known-safe prior states.
+- **DroidSpaces/Premium: `NETFILTER_XT_MATCH_RECENT`,
+  `NETFILTER_XT_TARGET_LOG`, `IP6_NF_NAT` added** to
+  `scripts/droidspaces/droidspaces.config` (container flavors only — never
+  touches the plain flavors' `gki_defconfig`). ufw's default rules and
+  Docker ≥27's IPv6 bridge NAT need them. Given this exact file's history of
+  two real bootloops from configs that looked equally KMI-unrelated by
+  Kconfig inspection alone, this was validated with a real
+  `ksun-susfs-droidspaces` build + KMI gate before landing, not just static
+  analysis: `changed=0 removed=0`.
+- **`scripts/device/device-probe.sh` added** — read-only sysfs/proc dump
+  (I/O scheduler, cpuidle governor, MTE/KASAN exposure, DAMON/LRU-sort
+  runtime state, f2fs/zram settings) for the on-device data several items
+  below still need. Safe to run any time; writes nothing.
 
 **Considered and explicitly rejected** (verified against real ACK/GuidixX
 history, not implemented): disabling `IKHEADERS`, `HEADERS_INSTALL`,
@@ -198,45 +228,77 @@ a field to `struct mem_section`, whose CRC vendor modules can depend on. Leave
 it on; it is a compile-time-only cost unless `page_owner=on` is set on the
 cmdline (it is not).
 
-**Deferred, needs on-device data before a decision:** which `cpuidle`
-governor is actually live (`menu` wins over `teo` by rating unless the
-vendor's `qcom-cpu-lpm` governor is loaded, which would make the Image's
-choice moot — check `/sys/devices/system/cpu/cpuidle/current_governor_ro`
-first); whether Android tick-rate assumptions in vendor `vendor_dlkm` modules
-expect `HZ=250` (LineageOS default) vs this tree's `HZ=300`; the BORE
-`set_load_weight()`/burst-score interaction with `nice()`/`sched_setscheduler()`.
+**Deferred, needs on-device data before a decision (`scripts/device/device-probe.sh`
+answers the first one):** which `cpuidle` governor is actually live (`menu`
+wins over `teo` by rating unless the vendor's `qcom-cpu-lpm` governor is
+loaded, which would make the Image's choice moot); whether Android tick-rate
+assumptions in vendor `vendor_dlkm` modules expect `HZ=250` (LineageOS
+default) vs this tree's `HZ=300`.
 
 **Deferred, out of scope for the kernel tree:** on-device idle/battery A/B
 tests (I/O scheduler choice, softlockup watchdog period, `sync_on_suspend`)
 belong in the Theettam Tweaks userspace module as runtime sysctls, not a
 kernel default — they are reversible without a new flash there.
 
-## Rule 10 — pending: ACK android14-6.1.176 bump
+## Rule 10 — ACK android14-6.1.176 bump: merged on branch `theettam-2.7-lts176`, NOT on theettam-2.7
 
-`android14-6.1.176_r00` exists upstream, 639 commits ahead of our 175 base
-(`git rev-list --count android14-6.1.175_r00..android14-6.1.176_r00`). A real
-trial merge (`git merge --no-commit --no-ff android14-6.1.176_r00`, then
-`git merge --abort`) found only **3 conflicting files**, 503+ auto-merged
-cleanly:
+`android14-6.1.176_r00`, 639 commits ahead of our 175 base
+(`git rev-list --count android14-6.1.175_r00..android14-6.1.176_r00`), has
+been merged and hand-resolved on a separate branch. **Not promoted to
+`theettam-2.7`** — it needs a device boot test first; everything short of
+that has been done. `SUBLEVEL` is now 176; `scripts/ci/build-flavor.sh`'s
+base check accepts both 175 and 176.
 
-- `drivers/slimbus/qcom-ngd-ctrl.c` — small, localized hunks.
-- `net/qrtr/af_qrtr.c` — one hunk: our side keeps a `qrtr_port_lock` spinlock
-  (used consistently at 4 call sites in the file) around `qrtr_port_remove()`;
-  176 replaces it with `xa_erase()` + `synchronize_rcu()` and drops the lock
-  at this one site. Taking 176's side here without converting the other 3
-  sites would leave an inconsistent locking model — do not resolve this
-  hunk-by-hunk without reading the whole file's locking scheme first.
-- `net/qrtr/ns.c` — **not a simple conflict**: our side runs the qrtr
-  name-service worker on a dedicated realtime `kthread_worker`/`task_struct`
-  (a common Qualcomm technique for QRTR/RPM IPC priority); 176 replaces it
-  with a generic `workqueue_struct` + `lookup_count`. These are two different
-  implementations, not a line-level disagreement — reconciling them means
-  understanding every call site that touches `qrtr_ns.work`/`.task`/`.kworker`.
-  qrtr carries modem/RPM IPC, and this fork has broken VoLTE from changes in
-  adjacent areas before (BTF, the premium PELT experiment). **Do not attempt
-  this merge without deep, unhurried review of `net/qrtr/ns.c` and a real
-  device boot test on the result** — it is well-scoped (3 files) but not
-  mechanical.
+3 conflicting files, 503+ auto-merged cleanly, each hand-resolved by finding
+the *provenance* of our side (not by picking whichever side looked simpler —
+see below) and rebuilt + KMI-gated afterward (`plain`: `changed=0 removed=0`
+except the xfrm note below; the merge touches nothing SUSFS/DroidSpaces
+grafts onto, so those flavors weren't independently re-validated against 176):
+
+- `drivers/slimbus/qcom-ngd-ctrl.c` — two hunks, both pure additions on our
+  side (`trace_rproc_qcom_event` logging + `qcom_slim_ngd_down()` PDR
+  cleanup) that 176 simply doesn't have. Kept both.
+- `net/qrtr/af_qrtr.c` — the `qrtr_port_lock` spinlock (used consistently at
+  4 sites in the file) vs. 176's `xa_erase()` + `synchronize_rcu()` at this
+  one site only. Taking 176's side here would leave 3 sites on the spinlock
+  and 1 on RCU — an inconsistent locking model. Kept our spinlock.
+- `net/qrtr/ns.c` — 4 hunks, none of them the kthread-vs-workqueue difference
+  they looked like at a glance (stock ACK 175 *itself* already uses a plain
+  `workqueue_struct`; our RT `kthread_worker` is a real Qualcomm commit,
+  `a729cfdb0bb4`, layered on top — "if worker is not processing packets on
+  control port fast enough, socket buffer may get full and result in drop of
+  control packets"). Reconciled by finding each side's actual origin
+  (`git log -S<anchor text>`) rather than guessing from the diff shape:
+  - struct decl: combined 176's new `u32 lookup_count` (a real DoS-prevention
+    fix, `6e3675251fce`) with our kthread fields — both needed, no overlap.
+  - `announce_servers()`: kept our all-nodes iteration
+    (`81f44092bc11`, Qualcomm, "ns service was notifying only local node ID
+    services after a pci disconnect and reconnect" — a real bug fix 176
+    doesn't have, since ACK's qrtr has no multi-node PCIe transport case).
+  - `ctrl_cmd_bye()`: **took 176's side** — it adds a `delete_node:` label +
+    `xa_erase`+`kfree` (`25d580a46b07`, a real memory-leak fix: the node was
+    never freed on client disconnect). Confirmed forced, not optional: part
+    of 176's change (a `goto delete_node` guard) auto-merged cleanly just
+    above this hunk, so keeping our side would leave a dangling `goto` with
+    no matching label — a compile error, not just a missed fix.
+  - `ctrl_cmd_del_client()`: kept our side — ratelimited logging that
+    continues the broadcast loop on a single send failure instead of
+    aborting it (`718816b95232`, Qualcomm, "prevent performance issues when
+    a client socket is full" — again a real fix 176 lacks).
+- **KMI note**: `plain` shows 3 CHANGED symbols — `km_migrate`,
+  `xfrm_register_km`, `xfrm_unregister_km` (176 added a `struct net *`
+  parameter to route XFRM MIGRATE notifications to the correct netns,
+  `fe4637983433` — a real upstream fix, security-relevant for
+  namespace-isolated setups like DroidSpaces). None of the three are in
+  `android/abi_gki_protected_exports_*` or `abi_gki_aarch64*` — GKI does not
+  guarantee their stability across LTS bumps — and their only in-tree
+  referencers are `net/xfrm/xfrm_state.c`, `net/xfrm/xfrm_user.c`,
+  `net/key/af_key.c`, all built directly into the Image (`CONFIG_XFRM=y`,
+  `CONFIG_NET_KEY=y`), not a loadable vendor module. No plausible phone
+  vendor driver (wifi/bt/display/touch/camera/modem) references IPsec
+  key-manager registration. Judged safe by this reasoning, **not** by an
+  actual boot — that judgment call is exactly why this stays off
+  `theettam-2.7` until a device confirms it.
 
 ---
 **TL;DR for a bootable build:** start from `theettam-2.7`, change nothing in the
