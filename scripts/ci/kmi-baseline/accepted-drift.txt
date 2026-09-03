@@ -1,0 +1,9 @@
+# Boot-verified KMI CRC shifts on theettam-2.7-lts176 (see README.md in this dir, BOOT-NOTES Rule 2/10).
+# All three come from the ACK android14-6.1.176 change to struct xfrm_mgr / km_migrate()
+# (net/xfrm, built into the Image, CONFIG_XFRM=y). Evidence: the plain lts176 flavor
+# booted on peridot 24069PC21I on 2026-09-03 with all 445 stock vendor_dlkm modules
+# loaded and RIL/wifi/bt/display/audio up (docs/BOOT-NOTES.md Rule 10 boot record).
+# The shift is root-driver independent, so it is identical for every flavor.
+km_migrate         0x398e4b07
+xfrm_register_km   0xdc63593a
+xfrm_unregister_km 0x794120a2
