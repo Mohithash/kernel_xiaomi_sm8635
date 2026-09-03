@@ -18,8 +18,10 @@
 # The SUSFS/DroidSpaces integration scripts MODIFY TRACKED FILES (fs/*, kernel/*,
 # include/linux/sched.h, drivers/Kconfig, ...). Run this in a dedicated git
 # worktree, never in your main checkout:
-#   git worktree add /path/wt-sukisu theettam-2.7
+#   git worktree add --detach /path/wt-sukisu theettam-2.7
 #   (cd /path/wt-sukisu && scripts/ci/build-flavor.sh sukisu-susfs)
+# To rebuild in the same worktree: git reset --hard <ref> && git clean -ffdx -e out
+# (double -f: KernelSU/ and susfs4ksu/ are nested git repos, single -f skips them).
 #
 # Environment:
 #   CLANG_DIR     toolchain root with bin/clang   (default: $HOME/clang)
