@@ -58,7 +58,9 @@ jobs:
         env:
           APATCH_SUPERKEY: ${{ inputs.apatch_superkey }}
         run: |
-          F='"ksun-plain","ksun-susfs","sukisu-susfs","ksun-susfs-droidspaces","resukisu-susfs","premium"'
+          # plain (NoRoot) is built and KMI-gated like every other flavor but never zipped:
+          # it is the KABI baseline / bisect flavor, not a download (SKIP_ZIP below).
+          F='"plain","ksun-plain","ksun-susfs","sukisu-susfs","ksun-susfs-droidspaces","resukisu-susfs","premium"'
           if [ -n "$APATCH_SUPERKEY" ]; then F="$F,\"apatch\""; else echo "::notice::APatch flavor skipped (no superkey supplied)"; fi
           echo "flavors=[$F]" >> "$GITHUB_OUTPUT"
 
@@ -115,12 +117,14 @@ jobs:
           ZIP_VERSION: ${{ env.THEETTAM_VERSION }}
           APATCH_SUPERKEY: ${{ inputs.apatch_superkey }}
           KMI_STRICT: "1"
+          SKIP_ZIP: ${{ matrix.flavor == 'plain' && '1' || '0' }}
         run: |
           set -euo pipefail
           export CLANG_DIR="$HOME/clang"
           scripts/ci/build-flavor.sh "${{ matrix.flavor }}"
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: matrix.flavor != 'plain'
         with:
           name: zip-${{ matrix.flavor }}
           path: dist/*.zip
