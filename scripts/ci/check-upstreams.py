@@ -33,9 +33,22 @@ def http_json(url):
 
 
 def ver_key(tag):
-    """android14-6.1.175_r00 -> (175, 0); sorts numerically, not lexically."""
+    """Numeric sort key for the three git-tags upstreams this watches:
+    android14-6.1.175_r00 -> (175, 0); ASB-2026-08-03_14-6.1 -> (2026, 8, 3);
+    KERNEL.PLATFORM.3.0.r1-13300-kernel.0 -> (13300,). Falls back to (-1,)
+    so an unrecognised tag sorts first (never picked as "latest") instead of
+    crashing the whole check.
+    """
     m = re.search(r"android14-6\.1\.(\d+)_r(\d+)", tag)
-    return (int(m.group(1)), int(m.group(2))) if m else (-1, -1)
+    if m:
+        return (int(m.group(1)), int(m.group(2)))
+    m = re.search(r"ASB-(\d{4})-(\d{2})-(\d{2})_", tag)
+    if m:
+        return (int(m.group(1)), int(m.group(2)), int(m.group(3)))
+    m = re.search(r"KERNEL\.PLATFORM\.3\.0\.r1-(\d+)-kernel\.0", tag)
+    if m:
+        return (int(m.group(1)),)
+    return (-1,)
 
 
 def latest_ack(spec):
@@ -154,11 +167,15 @@ def main():
             print("- **Device base bump** — GuidixX has new peridot commits. Merge `16.2` into the "
                   "kernel branch (do not cherry-pick: the boot-safety reverts only make sense as a "
                   "set). Re-check that the merge keeps them, then boot-test.")
-        if any(k not in ("ack", "guidixx") for k, _, _, _ in drifted):
+        if any(spec.get("pins_env") for _, spec, _, _ in drifted):
             print("- **Driver/SUSFS bump** — update the pin in `scripts/ci/pins.env`, "
                   "run the build workflow, and boot-test before promoting. The SUSFS hand-port grafts onto "
                   "driver internals, so a bump can move the anchors: if `integrate*.sh` asserts, the "
                   "anchor moved and the graft needs updating (this is the assert doing its job).")
+        if any(not spec.get("pins_env") and k not in ("ack", "guidixx") for k, spec, _, _ in drifted):
+            print("- **Informational only** — the remaining drifted entries (`lineage`/`asb`/`clo`) are "
+                  "not built from directly; read each one's `note` above for what, if anything, it means "
+                  "for this tree.")
     else:
         print("\nAll pins current.")
 

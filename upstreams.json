@@ -55,5 +55,29 @@
     "current": "0.13.8",
     "note": "kptools/kpimg are also sha256-pinned in scripts/ci/pins.env (KPTOOLS_SHA256/KPIMG_SHA256) — a version bump here needs both the version AND both checksums updated together.",
     "pins_env": "KP_VERSION"
+  },
+  "lineage": {
+    "name": "LineageOS android_kernel_qcom_sm8650 (lineage-22.2)",
+    "kind": "github-branch",
+    "repo": "LineageOS/android_kernel_qcom_sm8650",
+    "branch": "lineage-22.2",
+    "current": "898e2f3024c4ecc01434e5701a4a2ca5ecb95a01",
+    "note": "The commit GuidixX 16.2 actually merged (Jul 2026 CLO refresh). Watched separately because GuidixX has gone quiet (static since 2026-07-17) while this branch keeps moving — its own drift is invisible to the guidixx entry above until GuidixX next merges it. Informational only: not built from directly, no pins_env."
+  },
+  "asb": {
+    "name": "Android Security Bulletin tags (android14-6.1)",
+    "kind": "git-tags",
+    "url": "https://android.googlesource.com/kernel/common",
+    "tag_glob": "refs/tags/ASB-*_14-6.1",
+    "current": "ASB-2026-07-06_14-6.1",
+    "note": "Security-fix tags land here weeks before they show up in an android14-6.1.NNN_r00 LTS tag. Informational: an ASB tag existing is a heads-up to check docs/BOOT-NOTES.md Rule 10-style scoping for the fixes it carries, not a pin to build from."
+  },
+  "clo": {
+    "name": "CodeLinaro CLO kernel/qcom (KERNEL.PLATFORM.3.0.r1, cliffs/pineapple base)",
+    "kind": "git-tags",
+    "url": "https://git.codelinaro.org/clo/la/kernel/qcom.git",
+    "tag_glob": "refs/tags/KERNEL.PLATFORM.3.0.r1-*-kernel.0",
+    "current": "KERNEL.PLATFORM.3.0.r1-13300-kernel.0",
+    "note": "The vendor CLO base GuidixX 16.2 was built against. As of 2026-09 the newer 13400/13500 tags need no action: their ~41 non-merge commits touch only other-target vendor drivers, defconfig fragments, dt-bindings, scripts/Makefile.lib (.dtso) and hgsl — nothing linked into an Image-only build — and LineageOS has not merged them either. Watched so that stops being true silently."
   }
 }
