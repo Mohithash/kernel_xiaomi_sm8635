@@ -108,6 +108,13 @@ rd /proc/sys/kernel/watchdog_thresh
 rd /proc/sys/kernel/soft_watchdog
 
 echo
+echo "=== hardening sysctls (root-only on Android; BOOT-NOTES Rule 11 BPF_UNPRIV_DEFAULT_OFF question) ==="
+rd /proc/sys/kernel/unprivileged_bpf_disabled
+rd /proc/sys/kernel/kptr_restrict
+rd /proc/sys/kernel/dmesg_restrict
+rd /proc/sys/net/core/bpf_jit_harden
+
+echo
 echo "=== suspend ==="
 rd /sys/power/sync_on_suspend
 
