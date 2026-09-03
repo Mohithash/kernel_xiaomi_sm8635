@@ -97,9 +97,16 @@ else
 fi
 
 # ==============================================================================
-# 3. dmesg: zero boot-killer / instability lines (root: dmesg_restrict)
+# 3. dmesg: boot-killer / instability lines (root: dmesg_restrict)
+#    Hard failures always FAIL. A kernel WARN_ON ('WARNING: CPU:') FAILs unless
+#    its site is in KNOWN_WARN, the stock vendor-module warnings peridot prints
+#    on every boot (docs/BOOT-NOTES.md Rule 10 boot record):
+#      drivers/spmi/spmi-pmic-arb.c:309  qcom_spmi_pmic probing an absent PMIC address
+#      kernel/irq/manage.c:914           goodix_ts gesture resume, unbalanced IRQ wake
 # ==============================================================================
-DPAT='disagrees about version|module verification|exec format|Kernel panic|BUG:|WARNING:|hung task|soft lockup|Call trace'
+# Case-sensitive on purpose: 'ramoops_region' and 'debug' must not match Oops/BUG.
+HARD='disagrees about version|module verification failed|exec format error|Kernel panic|[^a-zA-Z_]BUG: |blocked for more than|soft lockup|detected stalls? on CPU|Internal error: Oops'
+KNOWN_WARN='drivers/spmi/spmi-pmic-arb.c:309 kernel/irq/manage.c:914'
 # Same rule as config.gz: the ring buffer is up to log_buf_len=2M, so stream it.
 dm() { priv dmesg 2>/dev/null; }
 if [ "$HAVE_ROOT" = 1 ]; then
@@ -107,11 +114,23 @@ if [ "$HAVE_ROOT" = 1 ]; then
   if [ "${NDM:-0}" -lt 50 ] 2>/dev/null; then
     skip dmesg-clean "dmesg returned ${NDM:-0} lines (ring buffer rotated? re-run right after boot)"
   else
-    N="$(dm | grep -ciE "$DPAT" | tr -d ' ')"
-    if [ "${N:-1}" -eq 0 ] 2>/dev/null; then
-      pass dmesg-clean "0 hits for '$DPAT' in $NDM lines"
+    NH="$(dm | grep -cE "$HARD" | tr -d ' ')"
+    UNKNOWN=""; KNOWN=""
+    for site in $(dm | grep -oE 'WARNING: CPU: [0-9]+ PID: [0-9]+ at [^ ]+' | awk '{print $NF}' | sort -u); do
+      case " $KNOWN_WARN " in
+        *" $site "*) KNOWN="$KNOWN $site" ;;
+        *) UNKNOWN="$UNKNOWN $site" ;;
+      esac
+    done
+    if [ "${NH:-1}" -eq 0 ] 2>/dev/null && [ -z "$UNKNOWN" ]; then
+      pass dmesg-clean "$NDM lines, 0 hard failures, no unexpected WARN_ON${KNOWN:+ (known vendor WARNs:$KNOWN)}"
+    elif [ "${NH:-1}" -gt 0 ] 2>/dev/null; then
+      fail dmesg-clean "$NH hard-failure line(s), first: $(dm | grep -E "$HARD" | head -1)"
     else
-      fail dmesg-clean "$N hit(s), first: $(dm | grep -iE "$DPAT" | head -1)"
+      fail dmesg-clean "unexpected WARN_ON site(s):$UNKNOWN (known:${KNOWN:- none})"
+    fi
+    if dm | grep -q 'Unprivileged eBPF is enabled'; then
+      info unpriv-bpf "kernel warns 'Unprivileged eBPF is enabled' (unprivileged_bpf_disabled=0): CONFIG_BPF_UNPRIV_DEFAULT_OFF not in effect"
     fi
   fi
 else
