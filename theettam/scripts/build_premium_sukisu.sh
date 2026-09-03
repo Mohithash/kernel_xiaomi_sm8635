@@ -48,10 +48,10 @@ disable_btf() {
 # --- pins (BOOT-NOTES / proven) ---
 SUKISU_REPO="${SUKISU_REPO:-https://github.com/SukiSU-Ultra/SukiSU-Ultra}"
 SUKISU_REF="${SUKISU_REF:-susfs_new}"
-SUKISU_PIN="${SUKISU_PIN:-278d822a}"
+SUKISU_PIN="${SUKISU_PIN:-278d822a4ebd214bcfd774b7910cb11cdc560bb9}"
 SUSFS_REPO="${SUSFS_REPO:-https://gitlab.com/simonpunk/susfs4ksu.git}"
 SUSFS_BRANCH="${SUSFS_BRANCH:-gki-android14-6.1}"
-SUSFS_PIN="${SUSFS_PIN:-8199bb65}"
+SUSFS_PIN="${SUSFS_PIN:-090cf407fea14d960cba55ce6f69cc61a146d1b3}"   # v2.2.0, same pin as build-theettam-20.yml
 
 ############################################
 # Phase 0: baseline Image + Module.symvers (unmodified tree config)
@@ -78,20 +78,28 @@ fi
 ############################################
 # Phase 1: wire SukiSU + SUSFS + DroidSpaces (proven scripts)
 ############################################
+# Pins MUST be full 40-char SHAs: GitHub/GitLab refuse to serve a short SHA to
+# `git fetch`, and the old `|| true` fallbacks silently left the tree at branch
+# tip (run 30837524503: SUSFS drifted 8199bb65 -> e287d59, namespace.c hunk
+# rejected, KABI gate failed on 20 core CRCs). A missed pin is now fatal.
+for p in SUKISU_PIN SUSFS_PIN; do
+  [[ "${!p}" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::$p='${!p}' is not a full 40-char sha"; exit 1; }
+done
+
 log "=== Fetch SukiSU pin $SUKISU_PIN ==="
 rm -rf KernelSU susfs4ksu
-git clone --depth=1 -b "$SUKISU_REF" "$SUKISU_REPO" KernelSU
-if [[ -n "$SUKISU_PIN" ]]; then
-  git -C KernelSU fetch --depth=1 origin "$SUKISU_PIN" || true
-  git -C KernelSU checkout "$SUKISU_PIN" || git -C KernelSU reset --hard "$SUKISU_PIN" || true
-fi
+git clone -b "$SUKISU_REF" "$SUKISU_REPO" KernelSU
+git -C KernelSU checkout --quiet "$SUKISU_PIN" || { echo "::error::SukiSU pin $SUKISU_PIN not found on $SUKISU_REF"; exit 1; }
+[[ "$(git -C KernelSU rev-parse HEAD)" == "$SUKISU_PIN" ]] || { echo "::error::SukiSU HEAD is not the pin"; exit 1; }
 echo "[i] SukiSU $(git -C KernelSU rev-parse --short HEAD)"
 
 log "=== Fetch SUSFS pin $SUSFS_PIN ==="
-git clone --depth=1 -b "$SUSFS_BRANCH" "$SUSFS_REPO" susfs4ksu
-git -C susfs4ksu fetch --depth=1 origin "$SUSFS_PIN" || true
-git -C susfs4ksu checkout "$SUSFS_PIN" || git -C susfs4ksu reset --hard "$SUSFS_PIN" || true
-echo "[i] SUSFS $(git -C susfs4ksu rev-parse --short HEAD)"
+git clone -b "$SUSFS_BRANCH" "$SUSFS_REPO" susfs4ksu
+git -C susfs4ksu checkout --quiet "$SUSFS_PIN" || { echo "::error::SUSFS pin $SUSFS_PIN not found on $SUSFS_BRANCH"; exit 1; }
+[[ "$(git -C susfs4ksu rev-parse HEAD)" == "$SUSFS_PIN" ]] || { echo "::error::SUSFS HEAD is not the pin"; exit 1; }
+SUSFS_V="$(sed -n 's/.*SUSFS_VERSION[^"]*"\([^"]*\)".*/\1/p' susfs4ksu/kernel_patches/include/linux/susfs.h)"
+[[ "$SUSFS_V" == "v2.2.0" ]] || { echo "::error::expected SUSFS v2.2.0 at $SUSFS_PIN, got '$SUSFS_V'"; exit 1; }
+echo "[i] SUSFS $SUSFS_V @ $(git -C susfs4ksu rev-parse --short HEAD)"
 
 log "=== integrate-sukisu.sh ==="
 bash scripts/susfs/integrate-sukisu.sh "$PWD/KernelSU" "$PWD/susfs4ksu" "$PWD"
