@@ -99,7 +99,15 @@ jobs:
           tar -I zstd -xf "neutron-clang-${NEUTRON_BUILD}.tar.zst" && rm -f "neutron-clang-${NEUTRON_BUILD}.tar.zst"
           curl -fsSLo antman "https://raw.githubusercontent.com/Neutron-Toolchains/antman/${ANTMAN_COMMIT}/antman"
           echo "${ANTMAN_SHA256}  antman" | sha256sum -c
-          chmod +x antman && ./antman --patch=glibc
+          chmod +x antman
+          # antman fetches patchelf (NixOS) and glibc (Arch mirrors) at run time,
+          # unpinned by its design; a mirror hiccup (wget exit 8, seen 2026-09-03)
+          # must not fail a build, so retry with backoff before giving up.
+          for i in 1 2 3 4; do
+            ./antman --patch=glibc && break
+            [ "$i" = 4 ] && { echo "::error::antman --patch=glibc failed 4 times"; exit 1; }
+            echo "antman attempt $i failed; retrying in $((i*20))s"; sleep $((i*20))
+          done
           ./bin/clang --version | head -1
 
       - name: Build ${{ matrix.flavor }} (scripts/ci/build-flavor.sh)
