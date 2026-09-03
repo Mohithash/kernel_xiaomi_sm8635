@@ -6,7 +6,7 @@ for hiding depends on the flavor:
 | Flavor | Kernel-side hiding |
 |---|---|
 | **KSUN** (plain) | None beyond the baseline rows below — relies on the userspace stack |
-| **KSUN + SUSFS**, **SukiSU-Ultra + SUSFS**, **ReSukiSU + SUSFS**, **Premium**, **KSUN + DroidSpaces** | **SUSFS v2.2.0** in-kernel: sus_path / sus_mount / sus_kstat / sus_map, `uname` + cmdline spoof, open-redirect, KSU/SUSFS symbol hiding. Configured from the manager's SUSFS page |
+| **KSUN + SUSFS**, **SukiSU-Ultra + SUSFS**, **ReSukiSU + SUSFS**, **Premium**, **KSUN + DroidSpaces** | **SUSFS v2.3.0** in-kernel: sus_path / sus_mount / sus_kstat / sus_map, `uname` + cmdline spoof, open-redirect, KSU/SUSFS symbol hiding. Configured from the manager's SUSFS page |
 | **APatch** | APatch's own hiding; no SUSFS (that is a KSU-side patch) |
 
 **SELinux is real and enforcing** on every flavor. Nothing in this tree makes the

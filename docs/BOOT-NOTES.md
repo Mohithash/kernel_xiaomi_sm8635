@@ -114,7 +114,8 @@ premium CALLSAFE CI drifted to the wrong susfs and failed its KABI gate):
   (a different SukiSU version, e.g. v4.1.3, is UNPROVEN here — its supercall/susfs
   graft anchors differ; do not swap versions without re-verifying KABI + boot)
 - ReSukiSU: `0b4f56fd` (native susfs) → `scripts/susfs/integrate-native.sh`
-- susfs4ksu: `090cf407` (gki-android14-6.1, v2.2.0 + Jul 23 OPEN_REDIRECT fixes)
+- susfs4ksu: `4fc9c189` (gki-android14-6.1, v2.3.0 — adds the zygote_next umount-inheritance
+  mitigation, the open_redirect hook refactor and the sleepable-static_key WARN fix)
 
 The integrate scripts accept exactly one patch reject — `fs/namespace.c`'s top-decl
 hunk, which the fixup re-creates — and fail on any other. A new reject means the

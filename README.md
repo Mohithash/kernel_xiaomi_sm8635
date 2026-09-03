@@ -6,7 +6,7 @@
 
 [![Release](https://img.shields.io/github/v/release/Mohithash/kernel_xiaomi_sm8635?style=for-the-badge&label=RELEASE&labelColor=0b1020&color=4f8cff)](../../releases/latest)
 [![Kernel](https://img.shields.io/badge/GKI-6.1.175-4ade80?style=for-the-badge&labelColor=0b1020)](https://android.googlesource.com/kernel/common/+/refs/tags/android14-6.1.175_r00)
-[![SUSFS](https://img.shields.io/badge/SUSFS-v2.2.0-c084fc?style=for-the-badge&labelColor=0b1020)](https://gitlab.com/simonpunk/susfs4ksu)
+[![SUSFS](https://img.shields.io/badge/SUSFS-v2.3.0-c084fc?style=for-the-badge&labelColor=0b1020)](https://gitlab.com/simonpunk/susfs4ksu)
 [![Downloads](https://img.shields.io/github/downloads/Mohithash/kernel_xiaomi_sm8635/total?style=for-the-badge&label=DOWNLOADS&labelColor=0b1020&color=fbbf24)](../../releases)
 [![License](https://img.shields.io/badge/license-GPL--2.0-60a5fa?style=for-the-badge&labelColor=0b1020)](COPYING)
 [![Boot tested](https://img.shields.io/badge/all%207%20flavors-boot%20tested-4ade80?style=for-the-badge&labelColor=0b1020)](../../releases/latest)
@@ -27,12 +27,12 @@ Seven root flavors. Pick the exact root + hiding stack you want.
 | Build | Root engine | SUSFS | KPM | Manager | Best for |
 |:--|:--|:-:|:-:|:--|:--|
 | **KSUN** | KernelSU-Next v3.3.0 | — | — | KernelSU-Next | Lightweight root, no kernel-side hiding |
-| **KSUN + SUSFS** ⭐ | KernelSU-Next v3.3.0 | `v2.2.0` | — | KernelSU-Next | Root **+ full hiding** — start here |
-| **SukiSU-Ultra + SUSFS** | SukiSU-Ultra | `v2.2.0` | — | SukiSU-Ultra | Root + hiding, SukiSU-Ultra ecosystem |
-| **ReSukiSU + SUSFS** | ReSukiSU | `v2.2.0` *(native)* | — | ReSukiSU | Root + hiding, **cleanest integration** |
-| **Premium** | SukiSU-Ultra | `v2.2.0` | — | SukiSU-Ultra | All-in-one: SukiSU + SUSFS + **DroidSpaces** containers |
+| **KSUN + SUSFS** ⭐ | KernelSU-Next v3.3.0 | `v2.3.0` | — | KernelSU-Next | Root **+ full hiding** — start here |
+| **SukiSU-Ultra + SUSFS** | SukiSU-Ultra | `v2.3.0` | — | SukiSU-Ultra | Root + hiding, SukiSU-Ultra ecosystem |
+| **ReSukiSU + SUSFS** | ReSukiSU | `v2.3.0` *(native)* | — | ReSukiSU | Root + hiding, **cleanest integration** |
+| **Premium** | SukiSU-Ultra | `v2.3.0` | — | SukiSU-Ultra | All-in-one: SukiSU + SUSFS + **DroidSpaces** containers |
 | **APatch** 🧪 | APatch / KernelPatch | — | ✅ **real** | APatch | The **only** flavor with working Kernel Patch Modules (`.kpm`) |
-| **KSUN + DroidSpaces** | KernelSU-Next v3.3.0 | `v2.2.0` | — | KernelSU-Next | Root + hiding + **LXC / Docker containers** |
+| **KSUN + DroidSpaces** | KernelSU-Next v3.3.0 | `v2.3.0` | — | KernelSU-Next | Root + hiding + **LXC / Docker containers** |
 
 <sub>KPM: SukiSU-Ultra's is stubbed upstream on GKI, so real <code>.kpm</code> support comes only from APatch/KernelPatch. APatch uses its own manager app and a <b>superkey</b> that is baked into the Image at build time and cannot be changed afterwards, so the APatch flavor is built only when a run supplies a private key (CI input <code>apatch_superkey</code>, or <code>APATCH_SUPERKEY</code> for local builds) and never published with a known default.</sub>
 
@@ -45,7 +45,7 @@ Seven root flavors. Pick the exact root + hiding stack you want.
 The **Premium** flavor bundles the full stack on top of the base kernel:
 
 - **Root — SukiSU-Ultra** `susfs_new` @ `278d822a` plus three kernel-side commits from `main` (pinned in `scripts/ci/pins.env`), reporting the real `KSU_VERSION` (~40800, not the `13000` fallback other builds hit).
-- **Hiding — SUSFS v2.2.0**: sus paths / mounts / kstat, `uname` + cmdline spoof, open-redirect, symbol hiding.
+- **Hiding — SUSFS v2.3.0**: sus paths / mounts / kstat, `uname` + cmdline spoof, open-redirect, symbol hiding.
 - **Containers — DroidSpaces**: native LXC / rootless Docker via `USER_NS`, `PID_NS`, `IPC_NS` and `SYSVIPC` **relocated into `ANDROID_KABI_RESERVE` slots 6/7/8** so stock `vendor_dlkm` still loads (no bootloop).
 - **Calls kept working**: `DEBUG_INFO_BTF` stays enabled, so netd / IMS / **VoLTE** come up (disabling it is what broke calls in the earlier premium alpha).
 
@@ -153,7 +153,7 @@ symbol ships without appearing in a defconfig, and a defconfig line can be overr
 | 🚦 | **CAKE** *(available)* | For links whose bandwidth you can name — tether, wifi. Not default; see below |
 | 🎭 | **Stock GKI version string** | Reports `6.1.175-android14-11-…` — no custom kernel branding |
 | 🔓 | **`MODULE_SIG=n`** | So KernelSU-family modules load |
-| 🛡 | **7 root flavors, SUSFS v2.2.0 on five** | 6 KSU-family + APatch. Including KernelSU-Next v3.3.0 + SUSFS — a pairing that doesn't exist upstream |
+| 🛡 | **7 root flavors, SUSFS v2.3.0 on five** | 6 KSU-family + APatch. Including KernelSU-Next v3.3.0 + SUSFS — a pairing that doesn't exist upstream |
 | 🔒 | **`/proc/config.gz` scrubbed** | Since 2.7 the embedded config carries no `CONFIG_KSU*` lines, so apps reading it see a stock GKI config (2.6 and earlier exposed `CONFIG_KSU=y`). The node itself stays: `system_server` needs it |
 | 🧱 | **KMI gate in CI** | Every flavor's exported-symbol CRCs are diffed against the boot-tested baseline before a zip exists — the check that catches compile-clean bootloops |
 
@@ -238,9 +238,9 @@ mounting.
 
    | Your zip | Install only this manager |
    |:--|:--|
-   | `KSUN3.3.0` · `KSUN3.3.0-SUSFS2.2.0` · `…DroidSpaces…` | **KernelSU-Next** |
-   | `SukiSU-Ultra-SUSFS2.2.0` · `Premium-SukiSU-SUSFS-DroidSpaces` | **SukiSU-Ultra** |
-   | `ReSukiSU-SUSFS2.2.0` | **ReSukiSU** |
+   | `KSUN3.3.0` · `KSUN3.3.0-SUSFS2.3.0` · `…DroidSpaces…` | **KernelSU-Next** |
+   | `SukiSU-Ultra-SUSFS2.3.0` · `Premium-SukiSU-SUSFS-DroidSpaces` | **SukiSU-Ultra** |
+   | `ReSukiSU-SUSFS2.3.0` | **ReSukiSU** |
    | `APatch-KernelPatch…` | **APatch** |
 
 2. **Reboot.** The manager is crowned during boot, so uninstalling one only takes effect after a restart.

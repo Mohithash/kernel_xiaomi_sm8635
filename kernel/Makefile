@@ -148,7 +148,7 @@ $(obj)/config_data.gz: $(obj)/config_data FORCE
 # (Debug.isVmapStack, b/151092221) and the device bootloops without it
 # (26c9dbf69240). Ship it, but without the root-driver lines: an app that
 # reads it sees a stock-looking GKI config instead of CONFIG_KSU=y.
-filechk_ikconfig = grep -vE '^(# )?CONFIG_(KSU|KPM)([_=]| )' $<
+filechk_ikconfig = grep -vE 'CONFIG_(KSU|KPM)[_= ]' $<
 
 $(obj)/config_data: $(KCONFIG_CONFIG) FORCE
 	$(call filechk,ikconfig)
