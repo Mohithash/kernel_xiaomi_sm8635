@@ -42,6 +42,10 @@ ui_print "        POCO F6  /  Redmi Turbo 3  (SM8635)"
 ui_print "   =========================================="
 ui_print " "
 ui_print "   Kernel version detected : $kernel_version"
+if [ -f "$home/version" ]; then
+  ui_print " "
+  while read -r line; do ui_print "   $line"; done < "$home/version"
+fi
 ui_print " "
 ui_print "   >>>  Flashing Theettam onto boot...  <<<"
 ui_print " "
