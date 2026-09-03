@@ -248,11 +248,19 @@ lts176 plain flavor, unprivileged reads):**
   `cpufreq.default_governor=performance` is overridden by init); MGLRU is on
   (`lru_gen/enabled: 0x0003`); THP is `[never]`; `/data` is f2fs with
   `atgc,age_extent_cache,fsync_mode=nobarrier,lookup_mode=perf`.
-- Still root-gated on Android (permission denied unprivileged): the live
-  block-queue scheduler (`/sys/block/sda/queue/scheduler`), DAMON runtime
-  enables, `watchdog_thresh`, `sync_on_suspend`, and `dmesg` itself
-  (`dmesg_restrict`). Re-run the probe with `su -c` on a rooted flavor to
-  close those out.
+- Root-gated values, read the same day on the rooted (SukiSU-Ultra + SUSFS)
+  lts176 flavor: **ADIOS 3.2.0 is the live scheduler** on every UFS LU
+  (`mq-deadline kyber [adios] bfq none`, `nr_requests` 126, `read_ahead_kb`
+  512); zram 6 GiB `lz4`, `swappiness` 70, `watermark_scale_factor` 44; MGLRU
+  on, `min_ttl_ms` 0; **DAMON reclaim/LRU-sort both `N`** (so the unported
+  DAMON restart fix in Rule 10 really is dormant); `watchdog_thresh` 10,
+  `soft_watchdog` 1, `sync_on_suspend` 1; `kptr_restrict` 2,
+  `dmesg_restrict` 0 (SELinux still blocks the shell's klogctl),
+  `bpf_jit_harden` 0, **`unprivileged_bpf_disabled` 0** (Rule 11).
+- ROM-side, not kernel: this ROM boots with `perf_event_paranoid=-1` and
+  `fs.protected_symlinks`/`protected_hardlinks`=0. Those are init sysctls, so
+  they belong in the Theettam Tweaks userspace module as reversible defaults
+  (3 / 1 / 1), not in a kernel config.
 
 **Deferred, out of scope for the kernel tree:** on-device idle/battery A/B
 tests (I/O scheduler choice, softlockup watchdog period, `sync_on_suspend`)
@@ -330,6 +338,28 @@ grafts onto, so those flavors weren't independently re-validated against 176):
   `su`), and **VoLTE/IMS could not be tested because no SIM was inserted**
   (`gsm.sim.state=[ABSENT,ABSENT]`; the OUT_OF_SERVICE state is that, not a
   kernel fault). Both need the rooted flavor + a SIM before promotion.
+- **Boot record, 2026-09-03 (later) — the SukiSU-Ultra + SUSFS lts176
+  flavor boots and roots on the same peridot.** Flashed with OrangeFox
+  sideload, then the SukiSU manager (v4.2.0) shows Working / driver 40901-2
+  / SuSFS v2.3.0 (Tracepoint Syscall Redirect) / SELinux Enforcing, and
+  `su` from adb gives `uid=0 context=u:r:ksu:s0` once Shell is granted.
+  `scripts/device/postflash-check.sh` rooted: **PASS=11 FAIL=0**, 444 vendor
+  modules, `/proc/config.gz` scrubbed, SUSFS initialised (29 dmesg lines).
+  `dmesg` (21.5k lines): **no `disagrees about version`, no module load
+  failure, no panic/BUG/lockup/Oops**, i.e. the accepted xfrm CRC drift is
+  benign in practice for the whole stock `vendor_dlkm`. Exactly two
+  `WARNING: CPU:` sites, both inside stock vendor modules and expected on
+  every boot: `drivers/spmi/spmi-pmic-arb.c:309` (`qcom_spmi_pmic` probing a
+  PMIC address that answers "transaction failed" at 0.26 s) and
+  `kernel/irq/manage.c:914` (`goodix_ts` gesture resume doing an unbalanced
+  IRQ 321 wake disable). postflash-check lists both as known. Still open
+  before promotion: a real VoLTE call (no SIM was in the phone all day).
+- The SukiSU manager shows a red "Manager version (40900) and KernelSU
+  driver version (40901) mismatch" banner with our `susfs_new` pin: the
+  driver number is `git rev-list --count` of the branch we build from, the
+  manager's is that of the release tag on `main`, and they differ by one.
+  Everything works; it is cosmetic until SukiSU publishes a manager built
+  past our pin. Do not "fix" it by bumping the pin without a boot test.
 - **Considered and not ported**: upstream's DAMON_RECLAIM/DAMON_LRU_SORT
   "fresh status" fix (`2f54908fae21`/`2f32fb0e0c32` — a kdamond that stops
   itself on bad input or an allocation failure can't be restarted before
