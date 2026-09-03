@@ -131,6 +131,31 @@ AnyKernel3 flashes `Image` only; stock `vendor_dlkm` is kept. Do NOT rebuild or
 replace vendor modules — the whole KABI discipline above exists so the STOCK vendor
 modules keep loading against our Image.
 
+**Why an Image with a different SUBLEVEL still loads them.** Every stock module
+carries `vermagic=6.1.<their sublevel>-android14-11-g<sha> SMP preempt mod_unload
+modversions aarch64`, which does not match ours. It loads anyway because
+`CONFIG_MODVERSIONS=y` puts symbol CRCs in the module, and `same_magic()` in
+`kernel/module/version.c` skips the leading version token when CRCs are present:
+
+```c
+/* First part is kernel version, which we ignore if module has crcs. */
+if (has_crcs) { amagic += strcspn(amagic, " "); bmagic += strcspn(bmagic, " "); }
+return strcmp(amagic, bmagic) == 0;
+```
+
+So the version string is *not* the contract; the exported-symbol CRCs are, which is
+exactly what Rule 2's gate checks. Two things follow. The rest of the magic string
+(`SMP preempt mod_unload modversions aarch64`) still has to match exactly, so
+flipping `PREEMPT`/`SMP`/`MODVERSIONS` breaks every module load at once, with a
+`version magic ... should be ...` error rather than an undefined-symbol one. And a
+sublevel bump is free as long as no CRC moves — which is how `theettam-2.7-lts176`
+(6.1.176) runs against a ROM whose modules were built at 6.1.175. Verified on
+device: 444 modules loaded, zero `disagrees about version` lines.
+
+The device-tree side of this contract (which tree builds the modules, and what not
+to "tidy up" there) is written down in the ROM's device tree as
+`docs/THEETTAM-KERNEL.md`.
+
 ---
 ## Rule 8 — upstream GuidixX `17` reverts (evaluated for 2.7)
 
