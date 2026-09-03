@@ -252,7 +252,9 @@ cp -f "$OUT/Module.symvers" "$DIST/Module.symvers-$FLAVOR"
 cp -f "$CFG" "$DIST/config-$FLAVOR"
 if [ "${SKIP_ZIP:-0}" != 1 ]; then
   AK="$OUT/AnyKernel3"; rm -rf "$AK"; cp -r anykernel "$AK"; cp -f "$IMG" "$AK/Image"
-  sed -i "s/^kernel.string=.*/kernel.string=Theettam · $LABEL/" "$AK/anykernel.sh"
+  # '|' delimiter: labels contain '/' (e.g. "APatch / KernelPatch")
+  sed -i "s|^kernel.string=.*|kernel.string=Theettam · $LABEL|" "$AK/anykernel.sh"
+  grep -q "^kernel.string=Theettam · " "$AK/anykernel.sh" || die "kernel.string substitution failed"
   printf '%s\n%s\n%s\n' "Theettam $ZIP_VERSION · $LABEL" "POCO F6 / Redmi Turbo 3 (peridot · SM8635)" "GKI $KREL" > "$AK/version"
   ZIP="$ZIP_PREFIX-$ZIP_VERSION-$ZIPNAME-peridot-$KREL.zip"
   ( cd "$AK" && zip -q -r9 "$OLDPWD/$DIST/$ZIP" . -x '.git*' )
