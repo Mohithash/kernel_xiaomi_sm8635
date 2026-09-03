@@ -135,6 +135,8 @@ static int pm8941_reboot_notify(struct notifier_block *nb,
 		reset_type = PON_PS_HOLD_TYPE_SHUTDOWN;
 		break;
 	case SYS_RESTART:
+		reset_type = PON_PS_HOLD_TYPE_WARM_RESET;
+		break;
 	default:
 		if (reboot_mode == REBOOT_WARM)
 			reset_type = PON_PS_HOLD_TYPE_WARM_RESET;

@@ -70,6 +70,7 @@ ATOMIC_NOTIFIER_HEAD(pen_charge_state_notifier);
 #define WLS_FW_BUF_SIZE			128
 #define DEFAULT_RESTRICT_FCC_UA		1000000
 #define CHG_CTRL_LIMIT_INTERVAL_MS	5000
+#define CHG_CTRL_LIMIT_IDLE_INTERVAL_MS	30000
 
 #define CHG_DEBUG_DATA_LEN	200
 #define WIRELESS_CHIP_FW_VERSION_LEN	16
@@ -804,6 +805,8 @@ struct battery_chg_dev {
 	int				chg_ctrl_last_idx;
 	int				chg_ctrl_last_mode;
 	int				fastcharge_mode_cache;
+	bool				chg_ctrl_thermal_suspend;
+	bool				chg_ctrl_stopping;
 	int				shutdown_volt_mv;
 	int				last_capacity;
 	bool				fast_update_temp;
@@ -11043,6 +11046,8 @@ static int battery_chg_probe(struct platform_device *pdev)
 	bcdev->chg_ctrl_last_idx = -1;
 	bcdev->chg_ctrl_last_mode = -1;
 	bcdev->fastcharge_mode_cache = -1;
+	bcdev->chg_ctrl_thermal_suspend = false;
+	bcdev->chg_ctrl_stopping = false;
 	rc = battery_chg_init_psy(bcdev);
 	if (rc < 0)
 		goto error;
@@ -11119,6 +11124,7 @@ error:
 	cancel_work_sync(&bcdev->usb_type_work);
 	cancel_work_sync(&bcdev->subsys_up_work);
 	cancel_work_sync(&bcdev->battery_check_work);
+	bcdev->chg_ctrl_stopping = true;
 	cancel_delayed_work_sync(&bcdev->chg_ctrl_limit_work);
 #if defined(CONFIG_OF) && defined(CONFIG_DRM_PANEL)
 	cancel_delayed_work_sync(&bcdev->panel_notify_register_work);
@@ -11148,6 +11154,7 @@ static int battery_chg_remove(struct platform_device *pdev)
 	cancel_work_sync(&bcdev->subsys_up_work);
 	cancel_work_sync(&bcdev->usb_type_work);
 	cancel_work_sync(&bcdev->battery_check_work);
+	bcdev->chg_ctrl_stopping = true;
 	cancel_delayed_work_sync(&bcdev->chg_ctrl_limit_work);
 	unregister_reboot_notifier(&bcdev->reboot_notifier);
 	unregister_reboot_notifier(&bcdev->shutdown_notifier);
