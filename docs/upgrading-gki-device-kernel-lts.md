@@ -103,7 +103,7 @@ without a merge-base `git merge` cannot do a 3-way merge — it has nothing to c
 is a flattened import (a handful of squashed commits), you cannot merge into it at all. Clone the upstream
 device kernel *with its history* and work there.
 
-Our tree: 1,189,618 commits, ~2.8 GB. That is the price of admission.
+Our tree: 1,191,091 commits (as of 2.7, 2026-09-03; 1,189,618 at the 175 bump), ~2.8 GB. That is the price of admission.
 
 ### 2. Fetch just the tag you want
 
@@ -220,7 +220,7 @@ alone. If you stack four changes and it bootloops, you have learned nothing. We 
 
 The thing that makes a device kernel boot is not the LTS version. It is the accumulated device work:
 
-- **Reverts.** Our base carries **6,567** revert commits (`git log --grep='^Revert' | wc -l`) undoing
+- **Reverts.** Our base carries **6,595** revert commits as of 2.7 (`git log --grep='^Revert' | wc -l`; 6,567 at the 175 bump) undoing
   upstream changes that break this hardware —
   UFS Qualcomm clock gating, qrtr spinlock waits, DRM valid-clones, PCI/PM reset delays, dwc3. After
   merging, verify the new LTS does not re-introduce what the vendor deliberately reverted.
