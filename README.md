@@ -281,6 +281,9 @@ scripts/susfs/integrate-native.sh   # ReSukiSU (fs-side only)
 # KMI gate: exported-symbol CRCs vs the boot-tested baseline (fails the build on drift)
 scripts/ci/symvers-diff.sh  ·  scripts/ci/kmi-baseline/<flavor>.symvers
 
+# after flashing: on-device PASS/FAIL gate, and what a release must satisfy
+scripts/device/postflash-check.sh  ·  docs/RELEASE-CHECKLIST.md  ·  docs/RELEASE-TEMPLATE.md
+
 # upstream drift, checked on the 5th and 20th
 upstreams.json  ·  scripts/ci/check-upstreams.py
 ```
