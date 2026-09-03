@@ -18,11 +18,24 @@ cp -v "$S4K_DIR"/kernel_patches/include/linux/*.h "$KROOT/include/linux/"
 
 cd "$KROOT"
 # apply the FULL fs-side patch (namespace.c top-decl hunk expected to reject -> fixup below)
-patch -p1 --fuzz=3 < "$P50" || true
+patch -p1 < "$P50" || true
+# The ONLY reject we accept is namespace.c's top-of-file decl hunk (the fixup below
+# re-creates it). Any other reject -- in namespace.c or elsewhere -- means the base
+# moved under the susfs patch; that must fail loudly, not be deleted and compiled.
+if [ -f fs/namespace.c.rej ]; then
+  _hunks=$(grep -c '^@@' fs/namespace.c.rej || true)
+  if [ "$_hunks" != 1 ] || ! grep -q '^@@ -32,10 ' fs/namespace.c.rej; then
+    echo "[!] fs/namespace.c: unexpected reject(s) -- not just the known top-decl hunk:"; cat fs/namespace.c.rej; exit 1
+  fi
+fi
+_other=$(find . -path ./out -prune -o -name '*.rej' -print | grep -v '^./fs/namespace.c.rej$' || true)
+if [ -n "$_other" ]; then echo "[!] rejects outside namespace.c:"; for r in $_other; do echo "== $r =="; cat "$r"; done; exit 1; fi
 
 # namespace.c susfs decl block (the one expected reject; idempotent)
 python3 - <<'PY'
 f="fs/namespace.c"; s=open(f).read()
+assert "#include <linux/mnt_idmapping.h>\n" in s, "namespace.c anchor <linux/mnt_idmapping.h> missing"
+assert '#include "internal.h"\n' in s, 'namespace.c anchor "internal.h" missing'
 inc="#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\n#include <linux/susfs_def.h>\n#endif\n"
 ext=("#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\n"
      "extern bool susfs_is_current_ksu_domain(void);\n"
@@ -35,7 +48,7 @@ if "extern bool susfs_is_current_ksu_domain" not in s:
 open(f,"w").write(s)
 print("  [+] namespace.c susfs decls applied")
 PY
-rm -f fs/namespace.c.rej fs/namespace.c.orig
+rm -f fs/namespace.c.rej fs/namespace.c.orig   # only the known hunk-1 reject survives the gate above
 
 # vendor modules must still load after susfs CRC changes
 for f in android/abi_gki_protected_exports_aarch64 android/abi_gki_protected_exports_x86_64; do

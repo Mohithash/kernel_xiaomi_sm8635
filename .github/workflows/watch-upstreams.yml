@@ -39,11 +39,11 @@ jobs:
     outputs:
       drift: ${{ steps.chk.outputs.drift }}
       ack_drift: ${{ steps.chk.outputs.ack_drift }}
+      errors: ${{ steps.chk.outputs.errors }}
       summary: ${{ steps.chk.outputs.summary }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: peridot-6.1.175
           fetch-depth: 1
 
       - id: chk
@@ -59,7 +59,7 @@ jobs:
             cat report.md
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: upstream-report
           path: report.md
@@ -79,22 +79,26 @@ jobs:
           git config --global user.name "ci"
           echo "::group::clone device base (full history — needed for a merge-base)"
           git clone --filter=blob:none https://github.com/Mohithash/kernel_xiaomi_sm8635.git k
-          cd k && git checkout peridot-6.1.175
+          cd k && git checkout "${{ github.ref_name }}"
           echo "::endgroup::"
           git remote add ack https://android.googlesource.com/kernel/common
           TAG=$(git ls-remote --tags ack 'refs/tags/android14-6.1.*_r00' \
                 | sed 's|.*refs/tags/||; s|\^{}||' | sort -t. -k3 -n | tail -1)
           echo "newest ACK tag: $TAG"
           git fetch -q --no-tags ack "refs/tags/$TAG:refs/tags/$TAG"
-          echo "merge-base: $(git merge-base HEAD "$TAG" | head -c12)"
+          # A branch with no ACK ancestry (a squashed snapshot) would "merge" nothing
+          # and report zero conflicts; refuse instead of reporting a false clean run.
+          MB=$(git merge-base HEAD "$TAG") || { echo "::error::no merge-base between $(git rev-parse --short HEAD) and $TAG"; exit 1; }
+          echo "merge-base: ${MB:0:12}"
           set +e
           git merge --no-commit --no-ff "$TAG" > merge.log 2>&1
           set -e
+          grep -qE 'CONFLICT|Automatic merge|Already up to date' merge.log || { cat merge.log; echo "::error::merge did not run"; exit 1; }
           echo "### conflicts"
           git diff --name-only --diff-filter=U | tee conflicts.txt
           echo "count: $(wc -l < conflicts.txt)"
           echo "auto-merged cleanly: $(git diff --cached --name-only | wc -l) files"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
           name: ack-merge-dryrun
@@ -108,14 +112,15 @@ jobs:
     if: always() && needs.check.result == 'success'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with: { name: upstream-report }
-      - uses: actions/github-script@v7
+      - uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           script: |
             const fs = require('fs');
             const body = fs.readFileSync('report.md', 'utf8');
             const drift = '${{ needs.check.outputs.drift }}' === 'true';
+            const errors = '${{ needs.check.outputs.errors }}' === 'true';
             const title = process.env.ISSUE_TITLE;
 
             const found = await github.rest.search.issuesAndPullRequests({
@@ -123,6 +128,12 @@ jobs:
             });
             const existing = found.data.items[0];
 
+            if (!drift && errors) {
+              // Some resolvers failed (API rate limit, outage): "no drift" is unknown,
+              // not all-clear. Leave any open issue exactly as it is.
+              core.warning('upstream checks errored; leaving the tracking issue untouched');
+              return;
+            }
             if (!drift) {
               if (existing) {
                 await github.rest.issues.createComment({

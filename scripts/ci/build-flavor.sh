@@ -34,6 +34,7 @@
 #   ALLOW_DIRTY=1 skip the clean-tree check
 #   SKIP_ZIP=1    do not package
 #   USE_CCACHE=0  do not wrap clang in ccache even if installed
+#   KMI_STRICT=1  fail if scripts/ci/kmi-baseline/<flavor>.symvers is missing (CI sets this)
 set -euo pipefail
 
 FLAVOR="${1:-}"
@@ -91,7 +92,11 @@ fetch_driver() {
   rm -rf KernelSU
   case "$ROOT_ENGINE" in
     ksun)
-      git clone --quiet --depth=1 --branch "$KSUN_TAG" "$KSUN_REPO" KernelSU ;;
+      # No --depth: KSUN's Kbuild derives KSU_VERSION from `git rev-list --count HEAD`
+      # and a shallow clone yields 30001 (manager then reports an ancient driver).
+      git clone --quiet --branch "$KSUN_TAG" "$KSUN_REPO" KernelSU
+      local cnt; cnt=$(git -C KernelSU rev-list --count HEAD)
+      [ "$cnt" -gt 100 ] || die "KernelSU-Next clone looks shallow (rev-list count $cnt)" ;;
     sukisu)
       git clone --quiet -b "$SUKISU_BRANCH" "$SUKISU_REPO" KernelSU
       git -C KernelSU checkout --quiet "$SUKISU_PIN"
@@ -202,6 +207,25 @@ make -j"$JOBS" O="$OUT" CC="$CCW" 2>&1 | tee "$OUT/build.log" | grep -E --line-b
 [ "${PIPESTATUS[0]}" = 0 ] || die "kernel build failed (see $OUT/build.log)"
 IMG="$OUT/arch/arm64/boot/Image"; [ -f "$IMG" ] || die "no Image"
 KREL="$(cat "$OUT/include/config/kernel.release")"
+
+# ---- 5b. KMI gate (docs/BOOT-NOTES.md Rule 2) ------------------------------------------------
+# Stock vendor_dlkm modules are prebuilt against the boot-tested Image. A config or
+# merge that shifts an exported symbol's CRC compiles fine and bootloops. Compare
+# every export CRC in Module.symvers against the baseline recorded from the
+# boot-tested build of this flavor.
+KMI_BASE="scripts/ci/kmi-baseline/$FLAVOR.symvers"
+if [ -f "$KMI_BASE" ]; then
+  if scripts/ci/symvers-diff.sh "$KMI_BASE" "$OUT/Module.symvers" > "$OUT/kmi-diff.txt" 2> "$OUT/kmi-summary.txt"; then
+    log "KMI gate: $(cat "$OUT/kmi-summary.txt") vs $KMI_BASE"
+  else
+    head -40 "$OUT/kmi-diff.txt"; cat "$OUT/kmi-summary.txt"
+    die "KMI CRC drift against the boot-tested baseline $KMI_BASE (full list: $OUT/kmi-diff.txt). This Image would not load the stock vendor modules."
+  fi
+elif [ "${KMI_STRICT:-0}" = 1 ]; then
+  die "no KMI baseline at $KMI_BASE (KMI_STRICT=1)"
+else
+  log "no KMI baseline at $KMI_BASE; gate skipped (KMI_STRICT=1 to require it)"
+fi
 
 # ---- 6. APatch: patch the compiled Image ------------------------------------------------------
 if [ "$APATCH" = 1 ]; then

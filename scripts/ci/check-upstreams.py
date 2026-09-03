@@ -79,8 +79,29 @@ RESOLVERS = {
 }
 
 
+def load_pins_env():
+    """KEY=value pairs from scripts/ci/pins.env (the pins the builds actually use)."""
+    pins = {}
+    path = os.path.join(ROOT, "scripts", "ci", "pins.env")
+    if not os.path.exists(path):
+        return pins
+    for line in open(path):
+        line = line.split("#", 1)[0].strip()
+        m = re.fullmatch(r"([A-Z0-9_]+)=(?:\"([^\"]*)\"|(\S*))", line)
+        if m:
+            pins[m.group(1)] = m.group(2) if m.group(2) is not None else m.group(3)
+    return pins
+
+
 def main():
     cfg = json.load(open(os.path.join(ROOT, "upstreams.json")))
+    pins = load_pins_env()
+    for key, spec in cfg.items():
+        if isinstance(spec, dict) and spec.get("pins_env"):
+            if spec["pins_env"] not in pins:
+                print(f"::error::{spec['pins_env']} missing from scripts/ci/pins.env", file=sys.stderr)
+                return 1
+            spec["current"] = pins[spec["pins_env"]]
     rows, drifted, ack_drift, errors = [], [], False, []
 
     for key, spec in cfg.items():
@@ -134,8 +155,8 @@ def main():
                   "kernel branch (do not cherry-pick: the boot-safety reverts only make sense as a "
                   "set). Re-check that the merge keeps them, then boot-test.")
         if any(k not in ("ack", "guidixx") for k, _, _, _ in drifted):
-            print("- **Driver/SUSFS bump** — update the pin in `.github/workflows/build-theettam-20.yml`, "
-                  "run that workflow, and boot-test before promoting. The SUSFS hand-port grafts onto "
+            print("- **Driver/SUSFS bump** — update the pin in `scripts/ci/pins.env`, "
+                  "run the build workflow, and boot-test before promoting. The SUSFS hand-port grafts onto "
                   "driver internals, so a bump can move the anchors: if `integrate*.sh` asserts, the "
                   "anchor moved and the graft needs updating (this is the assert doing its job).")
     else:

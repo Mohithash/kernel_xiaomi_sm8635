@@ -1,0 +1,154 @@
+name: Theettam — build all flavors
+
+# One job per root flavor, all driven by scripts/ci/build-flavor.sh so a CI build
+# and a local build on ServerHive are the same thing (same pins, same toolchain,
+# same KMI gate). Pins live in scripts/ci/pins.env.
+#
+# A push to the kernel branch compile-verifies every flavor and KMI-gates each
+# Image against the boot-tested baseline in scripts/ci/kmi-baseline/. Only a
+# manual run with release=true publishes zips, and those are always marked
+# prerelease: compile-verified is not boot-tested.
+#
+# The APatch flavor bakes a superkey into the Image (KernelPatch's only auth), so
+# it is built only when a run supplies one; the old documented default
+# "theettam-change-me" gave every app on a flashed phone root until changed.
+
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "Publish a prerelease with the zips (compile-verified, untested)"
+        type: boolean
+        default: false
+      apatch_superkey:
+        description: "APatch superkey (leave empty to skip the APatch flavor)"
+        required: false
+        default: ""
+  push:
+    branches: [ theettam-2.7 ]
+    paths-ignore: [ '**/*.md', 'docs/**', 'assets/**' ]
+
+concurrency:
+  group: theettam-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+
+permissions:
+  contents: write
+
+env:
+  THEETTAM_VERSION: "2.7"
+  KBUILD_BUILD_USER: build
+  KBUILD_BUILD_HOST: localhost
+  # Neutron clang 23.0.0git build 30062026 (what every boot-tested release used).
+  # Fetched straight from the catalogue release and sha256-checked; antman is only
+  # used for its glibc patch and is itself pinned to a commit + checksum. Never
+  # cached: the glibc-patched binaries break on cache restore (cb6b7b88612a).
+  NEUTRON_BUILD: "30062026"
+  NEUTRON_SHA256: b473a420d693a4e3bc71b56ec4283c0e3738f87d6ac37fa202bb0be5e0a07521
+  ANTMAN_COMMIT: 0b32c45e3ad83a953b4bc3fd2feb4ad3cc87c1e8
+  ANTMAN_SHA256: deef2dcf11568403c712432ecb7678ef62c3244054ccfee8510ef94a8a8fb04d
+
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    outputs:
+      flavors: ${{ steps.m.outputs.flavors }}
+    steps:
+      - id: m
+        run: |
+          F='"ksun-plain","ksun-susfs","sukisu-susfs","ksun-susfs-droidspaces","resukisu-susfs","premium"'
+          if [ -n "${{ inputs.apatch_superkey }}" ]; then F="$F,\"apatch\""; else echo "::notice::APatch flavor skipped (no superkey supplied)"; fi
+          echo "flavors=[$F]" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        flavor: ${{ fromJSON(needs.plan.outputs.flavors) }}
+    name: ${{ matrix.flavor }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 1
+
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends bc bison flex build-essential \
+            libssl-dev libncurses-dev libelf-dev zlib1g-dev pkg-config git curl zip cpio \
+            kmod python3 ccache lld llvm dwarves zstd
+
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.ccache
+          key: ccache-${{ matrix.flavor }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ matrix.flavor }}-
+
+      - name: Neutron clang ${{ env.NEUTRON_BUILD }} (pinned, checksummed)
+        run: |
+          set -euo pipefail
+          rm -rf "$HOME/clang"; mkdir -p "$HOME/clang"; cd "$HOME/clang"
+          curl -fsSLO "https://github.com/Neutron-Toolchains/clang-build-catalogue/releases/download/${NEUTRON_BUILD}/neutron-clang-${NEUTRON_BUILD}.tar.zst"
+          echo "${NEUTRON_SHA256}  neutron-clang-${NEUTRON_BUILD}.tar.zst" | sha256sum -c
+          tar -I zstd -xf "neutron-clang-${NEUTRON_BUILD}.tar.zst" && rm -f "neutron-clang-${NEUTRON_BUILD}.tar.zst"
+          curl -fsSLo antman "https://raw.githubusercontent.com/Neutron-Toolchains/antman/${ANTMAN_COMMIT}/antman"
+          echo "${ANTMAN_SHA256}  antman" | sha256sum -c
+          chmod +x antman && ./antman --patch=glibc
+          ./bin/clang --version | head -1
+
+      - name: Build ${{ matrix.flavor }} (scripts/ci/build-flavor.sh)
+        env:
+          ZIP_VERSION: ${{ env.THEETTAM_VERSION }}
+          APATCH_SUPERKEY: ${{ inputs.apatch_superkey }}
+          KMI_STRICT: "1"
+        run: |
+          set -euo pipefail
+          export CLANG_DIR="$HOME/clang"
+          scripts/ci/build-flavor.sh "${{ matrix.flavor }}"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: zip-${{ matrix.flavor }}
+          path: dist/*.zip
+          if-no-files-found: error
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: build-${{ matrix.flavor }}
+          path: |
+            dist/Image-*
+            dist/Module.symvers-*
+            dist/config-*
+            out/build.log
+            out/kmi-diff.txt
+          if-no-files-found: ignore
+
+  release:
+    needs: build
+    if: success() && github.event_name == 'workflow_dispatch' && inputs.release
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: zip-*
+          path: zips
+          merge-multiple: true
+      - run: ls -lh zips/
+      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
+        with:
+          tag_name: ci-${{ env.THEETTAM_VERSION }}-${{ github.run_number }}
+          prerelease: true
+          make_latest: false
+          name: ${{ env.THEETTAM_VERSION }} CI build #${{ github.run_number }} (compile-verified, untested)
+          body: |
+            > [!IMPORTANT]
+            > **CI test build, not a release. Most people want the latest published release** —
+            > those are boot-tested. This is compile-verified and KMI-gated only.
+
+            Built from `${{ github.ref_name }}` @ `${{ github.sha }}` with Neutron clang ${{ env.NEUTRON_BUILD }}.
+            Flash only if you mean to test this build, with a backup and fastboot recovery ready.
+          files: zips/*.zip
