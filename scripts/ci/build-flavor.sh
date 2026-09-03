@@ -30,7 +30,7 @@
 #   ZIP_PREFIX    zip name prefix                 (default: Theettam)
 #   ZIP_VERSION   version string in the zip name  (default: dev)
 #   DIST          where zip/Image/symvers land    (default: dist)
-#   APATCH_SUPERKEY  superkey baked into the APatch Image (default: from pins.env)
+#   APATCH_SUPERKEY  superkey baked into the APatch Image (REQUIRED for apatch; no default)
 #   ALLOW_DIRTY=1 skip the clean-tree check
 #   SKIP_ZIP=1    do not package
 #   USE_CCACHE=0  do not wrap clang in ccache even if installed
@@ -229,13 +229,18 @@ fi
 
 # ---- 6. APatch: patch the compiled Image ------------------------------------------------------
 if [ "$APATCH" = 1 ]; then
+  [ -n "${APATCH_SUPERKEY:-}" ] || die "APATCH_SUPERKEY is required for the apatch flavor (no default: the key is KernelPatch's only auth and the app cannot change it later)"
+  [ "${#APATCH_SUPERKEY}" -ge 8 ] || die "APATCH_SUPERKEY must be at least 8 characters"
   mkdir -p "$OUT/kp"
   curl -fsSLo "$OUT/kp/kptools" "https://github.com/bmax121/KernelPatch/releases/download/${KP_VERSION}/kptools-linux"
   curl -fsSLo "$OUT/kp/kpimg"   "https://github.com/bmax121/KernelPatch/releases/download/${KP_VERSION}/kpimg-android"
+  echo "$KPTOOLS_SHA256  $OUT/kp/kptools" | sha256sum -c --quiet || die "kptools checksum mismatch"
+  echo "$KPIMG_SHA256  $OUT/kp/kpimg"     | sha256sum -c --quiet || die "kpimg checksum mismatch"
   chmod +x "$OUT/kp/kptools"
-  "$OUT/kp/kptools" -p -i "$IMG" -k "$OUT/kp/kpimg" -s "${APATCH_SUPERKEY:-$KP_SUPERKEY_DEFAULT}" -o "$IMG.kp"
+  "$OUT/kp/kptools" -p -i "$IMG" -k "$OUT/kp/kpimg" -s "$APATCH_SUPERKEY" -o "$IMG.kp"
   mv -f "$IMG.kp" "$IMG"
-  "$OUT/kp/kptools" -l -i "$IMG" | tee "$OUT/kp-list.txt"
+  "$OUT/kp/kptools" -l -i "$IMG" > "$OUT/kp-list.txt"
+  grep -vi 'superkey' "$OUT/kp-list.txt" || true
   grep -qiE 'superkey|kernelpatch' "$OUT/kp-list.txt" || die "KernelPatch not applied"
   log "KernelPatch $KP_VERSION applied"
 fi

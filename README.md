@@ -9,11 +9,12 @@
 [![SUSFS](https://img.shields.io/badge/SUSFS-v2.2.0-c084fc?style=for-the-badge&labelColor=0b1020)](https://gitlab.com/simonpunk/susfs4ksu)
 [![Downloads](https://img.shields.io/github/downloads/Mohithash/kernel_xiaomi_sm8635/total?style=for-the-badge&label=DOWNLOADS&labelColor=0b1020&color=fbbf24)](../../releases)
 [![License](https://img.shields.io/badge/license-GPL--2.0-60a5fa?style=for-the-badge&labelColor=0b1020)](COPYING)
-[![Boot tested](https://img.shields.io/badge/all%204%20flavors-boot%20tested-4ade80?style=for-the-badge&labelColor=0b1020)](../../releases/latest)
+[![Boot tested](https://img.shields.io/badge/all%207%20flavors-boot%20tested-4ade80?style=for-the-badge&labelColor=0b1020)](../../releases/latest)
+[![KMI gate](https://img.shields.io/badge/KMI-CRC%20gated%20in%20CI-4f8cff?style=for-the-badge&labelColor=0b1020)](docs/BOOT-NOTES.md)
 
 **A custom GKI kernel for the Xiaomi `peridot` — POCO F6 / Redmi Turbo 3 (Snapdragon 8s Gen 3)**
 
-Four root flavors. Pick the exact root + hiding stack you want.
+Seven root flavors. Pick the exact root + hiding stack you want.
 
 </div>
 
@@ -33,7 +34,7 @@ Four root flavors. Pick the exact root + hiding stack you want.
 | **APatch** 🧪 | APatch / KernelPatch | — | ✅ **real** | APatch | The **only** flavor with working Kernel Patch Modules (`.kpm`) |
 | **KSUN + DroidSpaces** | KernelSU-Next v3.3.0 | `v2.2.0` | — | KernelSU-Next | Root + hiding + **LXC / Docker containers** |
 
-<sub>KPM: SukiSU-Ultra's is stubbed upstream on GKI, so real `.kpm` support comes only from APatch/KernelPatch. APatch uses its own manager app + superkey (baked as <code>theettam-change-me</code> — change it after first boot).</sub>
+<sub>KPM: SukiSU-Ultra's is stubbed upstream on GKI, so real <code>.kpm</code> support comes only from APatch/KernelPatch. APatch uses its own manager app and a <b>superkey</b> that is baked into the Image at build time and cannot be changed afterwards, so the APatch flavor is built only when a run supplies a private key (CI input <code>apatch_superkey</code>, or <code>APATCH_SUPERKEY</code> for local builds) and never published with a known default.</sub>
 
 ### **[⬇  Download latest](../../releases/latest)**
 
@@ -43,15 +44,15 @@ Four root flavors. Pick the exact root + hiding stack you want.
 
 The **Premium** flavor bundles the full stack on top of the base kernel:
 
-- **Root — SukiSU-Ultra** (latest `susfs_new`), reporting the correct `KSU_VERSION 40837` (not the `13000` fallback other builds hit).
+- **Root — SukiSU-Ultra** `susfs_new` @ `278d822a` plus three kernel-side commits from `main` (pinned in `scripts/ci/pins.env`), reporting the real `KSU_VERSION` (~40800, not the `13000` fallback other builds hit).
 - **Hiding — SUSFS v2.2.0**: sus paths / mounts / kstat, `uname` + cmdline spoof, open-redirect, symbol hiding.
 - **Containers — DroidSpaces**: native LXC / rootless Docker via `USER_NS`, `PID_NS`, `IPC_NS` and `SYSVIPC` **relocated into `ANDROID_KABI_RESERVE` slots 6/7/8** so stock `vendor_dlkm` still loads (no bootloop).
 - **Calls kept working**: `DEBUG_INFO_BTF` stays enabled, so netd / IMS / **VoLTE** come up (disabling it is what broke calls in the earlier premium alpha).
 
-Everything below is shared by **all** 2.5 flavors, Premium included:
+Everything below is shared by **all** flavors, Premium included:
 
 - **DAMON** proactive reclaim + LRU-sort (built in, sysfs-gated), **Boeffla wakelock blocker** (empty by default — opt-in, never block modem wakelocks), **ZRAM writeback**.
-- Built with **Neutron clang 23** (LLVM trunk); **BORE** scheduler, **ADIOS** I/O, **MGLRU**, `HZ=300`, **BBR + CAKE** networking, uclamp.
+- Built with **Neutron clang 23.0.0git** (build `30062026`, pinned by sha256 in CI); **BORE** scheduler, **ADIOS** I/O, **MGLRU**, `HZ=300`, **BBR + CAKE** networking, uclamp.
 
 > KPM is **not** in Premium — SukiSU-Ultra's KPM is stubbed upstream on GKI. For real `.kpm`, use the **APatch** flavor.
 
@@ -152,7 +153,9 @@ symbol ships without appearing in a defconfig, and a defconfig line can be overr
 | 🚦 | **CAKE** *(available)* | For links whose bandwidth you can name — tether, wifi. Not default; see below |
 | 🎭 | **Stock GKI version string** | Reports `6.1.175-android14-11-…` — no custom kernel branding |
 | 🔓 | **`MODULE_SIG=n`** | So KernelSU-family modules load |
-| 🛡 | **4 root flavors + SUSFS v2.2.0** | Including KernelSU-Next v3.3.0 + SUSFS — a pairing that doesn't exist upstream |
+| 🛡 | **7 root flavors, SUSFS v2.2.0 on five** | 6 KSU-family + APatch. Including KernelSU-Next v3.3.0 + SUSFS — a pairing that doesn't exist upstream |
+| 🔒 | **`/proc/config.gz` closed** | `IKCONFIG_PROC` off since 2.7 — the config no longer advertises `CONFIG_KSU` to apps (2.6 and earlier exposed it) |
+| 🧱 | **KMI gate in CI** | Every flavor's exported-symbol CRCs are diffed against the boot-tested baseline before a zip exists — the check that catches compile-clean bootloops |
 
 ### Inherited from the device base
 
@@ -202,7 +205,7 @@ Each addition targets a **different** bottleneck, which is why they compose inst
 - **PLB isn't advertised.** The code ships and is correct, but PLB repaths flows across datacenter ECMP by rewriting the IPv6 flow label. A phone has one path.
 - **KSM isn't enabled.** RAM dedup costs constant CPU scanning for little gain on a phone.
 - **`USER_NS` ships only in the container flavors** (DroidSpaces and Premium), which need it for rootless LXC/Docker. It's a well-worn privilege-escalation surface, so the lean flavors omit it. Where it does ship, `SYSVIPC` is relocated into `ANDROID_KABI_RESERVE` slots so stock `vendor_dlkm` still loads.
-- **The toolchain is stock AOSP clang.** Neutron's LTO/PGO/BOLT make *the compiler* faster, not the kernel it emits — and a rolling toolchain can't be pinned.
+- **The toolchain is pinned.** Releases are built with Neutron clang build `30062026` (clang 23.0.0git), fetched from the catalogue release and sha256-checked in CI; a moved tarball fails the build instead of silently changing the compiler.
 
 The pattern is the same throughout: **add what addresses a real bottleneck, leave out what only sounds good.**
 
@@ -241,7 +244,7 @@ mounting.
    | `APatch-KernelPatch…` | **APatch** |
 
 2. **Reboot.** The manager is crowned during boot, so uninstalling one only takes effect after a restart.
-3. **Reflash your flavor's zip** — [2.0.1](../../releases/tag/v2.0.1) or [2.0](../../releases/tag/v2.0) —
+3. **Reflash your flavor's zip** from the [latest release](../../releases/latest) —
    then reboot. Flashing does not touch `/data`, so your modules and allowlist survive.
 4. **Check the manager matches the kernel.** A manager much older or newer than the kernel's driver can
    fail to talk to it. Use the manager build that pairs with your flavor's driver version.
@@ -253,24 +256,38 @@ enough to tell a crowning problem from a real bug.
 
 ## <img src="https://img.shields.io/badge/-07-fbbf24?style=flat-square" height="18"> Building
 
-The kernel source and its CI live on the **[`peridot-6.1.175`](../../tree/peridot-6.1.175)** branch —
-`main` carries the docs.
+The kernel source, docs and CI live on the **[`theettam-2.7`](../../tree/theettam-2.7)** branch
+(history continues from tag `v2.6`). The branches named `peridot-6.1.175` and `main` are historical:
+`peridot-6.1.175` is a squashed source snapshot with no history and no CI — never build from or merge into it.
 
 ```bash
-# all four flavors build from one matrix workflow
-.github/workflows/build-theettam-20.yml
+# build any flavor locally, exactly as CI does (run in a git worktree — the SUSFS
+# integration modifies tracked files)
+git worktree add --detach ../wt-sukisu theettam-2.7
+cd ../wt-sukisu && CLANG_DIR=/path/to/neutron-clang scripts/ci/build-flavor.sh sukisu-susfs
+#   flavors: plain ksun-plain ksun-susfs sukisu-susfs ksun-susfs-droidspaces resukisu-susfs premium apatch
+
+# all seven flavors build from one workflow; the same script runs in CI
+.github/workflows/build-theettam.yml
+
+# every upstream pin, as full SHAs (build script + upstream watcher both read this)
+scripts/ci/pins.env
 
 # SUSFS integration — hand-port, and the native pairing
 scripts/susfs/integrate.sh          # KernelSU-Next
 scripts/susfs/integrate-sukisu.sh   # SukiSU-Ultra
 scripts/susfs/integrate-native.sh   # ReSukiSU (fs-side only)
 
-# pinned upstreams, checked on the 5th and 20th
+# KMI gate: exported-symbol CRCs vs the boot-tested baseline (fails the build on drift)
+scripts/ci/symvers-diff.sh  ·  scripts/ci/kmi-baseline/<flavor>.symvers
+
+# upstream drift, checked on the 5th and 20th
 upstreams.json  ·  scripts/ci/check-upstreams.py
 ```
 
 Every upstream is pinned to an exact commit — a moved or reclaimed repo fails the
-build loudly instead of quietly building someone else's tree.
+build loudly instead of quietly building someone else's tree. A build that compiles
+but shifts an exported CRC fails the KMI gate instead of shipping a bootloop.
 
 ---
 
