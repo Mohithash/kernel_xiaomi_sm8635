@@ -80,18 +80,20 @@ struct qrtr_node {
 	struct xarray servers;
 };
 
-/* Max lookup limit is chosen based on the current platform requirements. If the
- * requirement changes in the future, this value can be increased.
- */
-#define QRTR_NS_MAX_LOOKUPS 64
-
 /* Max nodes, server, lookup limits are chosen based on the current platform
  * requirements. If the requirement changes in the future, these values can be
  * increased.
  */
 #define QRTR_NS_MAX_NODES   64
 #define QRTR_NS_MAX_SERVERS 256
-#define QRTR_NS_MAX_LOOKUPS 64
+/* The Xiaomi sm8635 vendor stack (pd-mapper, sensors, modem, WLAN, audio) holds
+ * well over 64 concurrent NEW_LOOKUPs during boot. At the upstream default the
+ * nameserver starts returning -ENOSPC around t=10s, the sensors multihal never
+ * reaches the ADSP sensor framework, system_server blocks in SensorService and
+ * its Watchdog restarts zygote until RescueParty reboots into recovery. 512
+ * keeps the bound the upstream commit intended while covering this platform.
+ */
+#define QRTR_NS_MAX_LOOKUPS 512
 
 static u8 node_count;
 
