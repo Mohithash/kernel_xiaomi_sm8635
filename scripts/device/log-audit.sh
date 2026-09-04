@@ -32,8 +32,19 @@ grep -icE 'ksu|susfs|magisk' /data/local/tmp/.avc | sed 's/^/   count: /'
 rm -f /data/local/tmp/.avc
 
 sec "native crashes: tombstones and dropbox"
-echo "  tombstones: $(ls /data/tombstones/ 2>/dev/null | wc -l)"
-ls -lt /data/tombstones/ 2>/dev/null | head -4 | sed 's/^/   /'
+# Name the crashing process and say whether it is from THIS boot: a tombstone
+# from a previous boot is history, not a live problem, and the distinction is
+# the whole point of looking.
+BOOTED=$(( $(date +%s) - $(cut -d. -f1 /proc/uptime) ))
+for t in /data/tombstones/tombstone_*; do
+  case "$t" in *.pb) continue;; esac
+  [ -f "$t" ] || continue
+  WHEN=$(stat -c%Y "$t" 2>/dev/null)
+  [ "${WHEN:-0}" -ge "$BOOTED" ] && AGE="THIS BOOT" || AGE="previous boot"
+  printf '   %-16s %-13s %s\n' "$(basename $t)" "$AGE" \
+     "$(grep -m1 '^Cmdline:' "$t" 2>/dev/null | cut -c10-70)"
+  grep -m1 '^signal ' "$t" 2>/dev/null | sed 's/^/       /'
+done
 echo "  dropbox crash/anr entries in the last day:"
 ls -lt /data/system/dropbox/ 2>/dev/null | grep -E 'crash|anr|watchdog' | head -6 | sed 's/^/   /'
 echo "  (none listed above = none recorded)"
@@ -44,9 +55,12 @@ echo "  --- services that exited with a nonzero status ---"
 dmesg 2>/dev/null | grep -E "init: Service.*exited with status [1-9]" | head -6 | sed 's/^/   /'
 
 sec "kernel errors below the WARN threshold"
-dmesg 2>/dev/null | grep -icE '\berror\b' | sed 's/^/  lines containing error: /'
-dmesg 2>/dev/null | grep -iE '\berror\b' | grep -ivE 'no error|error_report|0 errors' \
-  | sed -E 's/^\[[0-9. ]+\] //' | sort | uniq -c | sort -rn | head -12 | sed 's/^/   /'
+# toybox grep has no \b word boundary - it errors out with "trailing backslash"
+# and the section silently produces nothing. Match the surrounding characters.
+dmesg 2>/dev/null | grep -icE '(^|[^a-z])error([^a-z]|$)' | sed 's/^/  lines containing error: /'
+dmesg 2>/dev/null | grep -iE '(^|[^a-z])error([^a-z]|$)' | grep -ivE 'no error|error_report|0 errors' \
+  | sed -E 's/^\[[0-9. ]+\] //; s/\[[0-9a-fx]+\]//g; s/[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]+//' \
+  | sort | uniq -c | sort -rn | head -12 | cut -c1-150 | sed 's/^/   /'
 
 sec "logcat: crashes, ANRs and fatals since boot"
 logcat -d -b crash 2>/dev/null | tail -20 | sed 's/^/   /'
