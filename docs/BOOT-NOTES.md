@@ -490,6 +490,74 @@ an Image-only flash (Rule 7) cannot deliver it, however loud the bulletin.
   Image-only flashing with stock modules, not a regression, and unrelated to
   the `DEBUG_INFO_BTF=n` breakage in Rule 0 (that removed vmlinux BTF).
 
+## Rule 12 — who actually owns the clocks on this device (measured 2026-09-04)
+
+Both big CPU clusters and the GPU run below their hardware maximum, always, and
+none of it is the kernel's doing. Written down because two people have now
+assumed the kernel could tune it.
+
+**The GPU.** `cooling_device37` (type `gpu`) is bound to no thermal zone at all —
+every GPU zone binding resolves to `cooling_device36`, the kernel's own devfreq
+cooling device, which sits at state 0. `cooling_device37` is driven purely by
+`/vendor/bin/mi_thermald`, from `[INDIA-MONITOR-GPU]` in the decrypted regional
+map: one trip at **15 °C** against a composite sensor that reads 33–36 °C, so it
+is tripped permanently and asks for cooling state 3 forever.
+
+Here the kernel does help. `drivers/thermal/qcom/qti_devfreq_cdev.c` carries
+commit `80accb269363`, which remaps mid-range cooling states (start 1, divider 2,
+critical tail 2) and turns that requested state 3 into a stored 2 — 950 MHz
+instead of 900. **Measured on device**, driving `cur_state` with the power-HAL
+ceiling lifted:
+
+```
+written 0 -> stored 0 -> max_freq 1100000000     written 4 -> stored 3 -> 900000000
+written 1 -> stored 1 ->         1000000000      written 3 -> stored 2 -> 950000000
+written 2 -> stored 2 ->          950000000
+```
+
+Writing 4 storing 3, and 3 storing 2, is the remap running. At state 0 the GPU
+reaches the full 1100 MHz, so the hardware and the OPP table are fine; only the
+cooling request holds it down.
+
+**The CPU — and this is the part that surprises.** The caps are real:
+
+```
+policy0 (silver) scaling_max 2016000 == cpuinfo_max      no cap
+policy3 (gold)   scaling_max 2572800 vs 2707200 available   top 2 OPPs unreachable
+policy7 (prime)  scaling_max 2668800 vs 2918400 available   top 2 OPPs unreachable
+```
+
+and they come from the same daemon, via step curves whose **first step trips at
+25 °C** — a temperature a phone in use is never below:
+
+```
+[INDIA-SS-CPU3] trig 25000 37000 39000 ...  target 2572800 2188800 1920000 ...
+[INDIA-SS-CPU7] trig 25000 37000 39000 ...  target 2668800 2304000 2150400 ...
+```
+
+The composite sensor read 32969 when measured, i.e. past step 0 and below step 1,
+so the applied ceilings are exactly `2572800` and `2668800` — precisely what the
+sysfs files read.
+
+**But the CPU half of `80accb269363` does nothing on this device.** Those targets
+are frequencies in kHz, not cooling states: `strings /vendor/bin/mi_thermald`
+contains `/sys/devices/system/cpu/cpu%d/cpufreq/scaling_max_freq`, and the daemon
+writes the ceiling directly. The three cooling devices that `qti_cpufreq_cdev.c`
+registers and that the commit remaps — `cpufreq-cpu0`, `cpufreq-cpu3`,
+`cpufreq-cpu7` — all read `cur_state=0`, unused. No CPU cooling device is bound
+to a thermal zone either. So the CPU remap is inert here; keep it (it is correct,
+and it would apply on a ROM that drives the cooling devices) but do not expect it
+to buy anything on this one.
+
+**Consequence for tuning.** The CPU ceilings are not reachable from the kernel or
+from the device tree: `mi_thermald`, `thermald-devices.conf` and the regional map
+are extracted vendor blobs, the map is encrypted, and the daemon re-asserts every
+2000 ms, so a userspace module cannot hold a higher value either. Changing them
+means replacing the thermal policy wholesale, which is a real thermal decision
+wanting sustained-load measurement — not a tweak. Do not "fix" this by raising
+`scaling_max_freq` somewhere and calling it a win; it will be overwritten within
+two seconds.
+
 ---
 **TL;DR for a bootable build:** start from `theettam-2.7`, change nothing in the
 KMI, keep the two post-merge fixes and the reverts, use the pins in
