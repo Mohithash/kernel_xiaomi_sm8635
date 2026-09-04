@@ -40,8 +40,13 @@ for t in /data/tombstones/tombstone_*; do
   case "$t" in *.pb) continue;; esac
   [ -f "$t" ] || continue
   WHEN=$(stat -c%Y "$t" 2>/dev/null)
-  [ "${WHEN:-0}" -ge "$BOOTED" ] && AGE="THIS BOOT" || AGE="previous boot"
-  printf '   %-16s %-13s %s\n' "$(basename $t)" "$AGE" \
+  D=$(( ${WHEN:-0} - BOOTED ))
+  # Show the offset, not just the side of the boundary: a crash 46 s before
+  # boot happened during the previous shutdown and is a different story from
+  # one fifteen hours ago, and "previous boot" flattens both to the same word.
+  if [ "$D" -ge 0 ]; then AGE="THIS BOOT +${D}s"
+  else AGE="$(( -D / 60 ))min before boot"; fi
+  printf '   %-16s %-22s %s\n' "$(basename $t)" "$AGE" \
      "$(grep -m1 '^Cmdline:' "$t" 2>/dev/null | cut -c10-70)"
   grep -m1 '^signal ' "$t" 2>/dev/null | sed 's/^/       /'
 done
