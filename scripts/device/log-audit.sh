@@ -1,0 +1,64 @@
+#!/system/bin/sh
+# log-audit.sh — the check postflash-check.sh deliberately is not.
+#
+# postflash-check answers "did it boot correctly" by grepping dmesg for a fixed
+# set of hard failures. That is a gate, and it is narrow on purpose. This walks
+# the logs looking for things that are wrong but not fatal: policy denials,
+# native crashes, services that keep restarting, and driver errors that never
+# reach the level of a WARN. Read-only, needs root.
+#
+#   adb shell su -c 'sh /data/local/tmp/log-audit.sh' | tee audit.txt
+
+[ "$(id -u)" = 0 ] || { echo "needs root"; exit 1; }
+sec(){ echo; echo "=== $1 ==="; }
+
+sec "SELinux: is it real"
+echo "  getenforce           = $(getenforce)"
+echo "  /sys/fs/selinux/enforce = $(cat /sys/fs/selinux/enforce 2>/dev/null)"
+echo "  ro.build.type        = $(getprop ro.build.type)   ro.debuggable = $(getprop ro.debuggable)"
+echo "  ro.boot.selinux      = $(getprop ro.boot.selinux)  (leaks if 'permissive' while getenforce says Enforcing)"
+echo "  policy version       = $(cat /sys/fs/selinux/policyvers 2>/dev/null)"
+
+sec "AVC denials since boot, by source domain (triage: who is being denied what)"
+dmesg 2>/dev/null | grep 'avc:  denied' > /data/local/tmp/.avc
+echo "  total: $(wc -l < /data/local/tmp/.avc)"
+echo "  --- by scontext ---"
+grep -oE 'scontext=u:r:[a-z_0-9]+' /data/local/tmp/.avc | sort | uniq -c | sort -rn | head -12 | sed 's/^/   /'
+echo "  --- by {perm} tcontext ---"
+grep -oE '\{ [a-z_ ]+ \} for .*tcontext=u:object_r:[a-z_0-9]+' /data/local/tmp/.avc \
+  | sed -E 's/.*(\{ [a-z_ ]+ \}).*tcontext=u:object_r:([a-z_0-9]+)/\1 -> \2/' | sort | uniq -c | sort -rn | head -12 | sed 's/^/   /'
+echo "  --- denials naming the root engine (would be hiding leaks) ---"
+grep -icE 'ksu|susfs|magisk' /data/local/tmp/.avc | sed 's/^/   count: /'
+rm -f /data/local/tmp/.avc
+
+sec "native crashes: tombstones and dropbox"
+echo "  tombstones: $(ls /data/tombstones/ 2>/dev/null | wc -l)"
+ls -lt /data/tombstones/ 2>/dev/null | head -4 | sed 's/^/   /'
+echo "  dropbox crash/anr entries in the last day:"
+ls -lt /data/system/dropbox/ 2>/dev/null | grep -E 'crash|anr|watchdog' | head -6 | sed 's/^/   /'
+echo "  (none listed above = none recorded)"
+
+sec "services restarting (a loop means something is broken but retrying)"
+dmesg 2>/dev/null | grep -oE "init: Service '[a-zA-Z0-9_.-]+'" | sort | uniq -c | sort -rn | head -8 | sed 's/^/   /'
+echo "  --- services that exited with a nonzero status ---"
+dmesg 2>/dev/null | grep -E "init: Service.*exited with status [1-9]" | head -6 | sed 's/^/   /'
+
+sec "kernel errors below the WARN threshold"
+dmesg 2>/dev/null | grep -icE '\berror\b' | sed 's/^/  lines containing error: /'
+dmesg 2>/dev/null | grep -iE '\berror\b' | grep -ivE 'no error|error_report|0 errors' \
+  | sed -E 's/^\[[0-9. ]+\] //' | sort | uniq -c | sort -rn | head -12 | sed 's/^/   /'
+
+sec "logcat: crashes, ANRs and fatals since boot"
+logcat -d -b crash 2>/dev/null | tail -20 | sed 's/^/   /'
+echo "  --- E/F level, most frequent tags ---"
+logcat -d 2>/dev/null | grep -E '^[0-9-]+ [0-9:.]+ +[0-9]+ +[0-9]+ [EF] ' \
+  | awk '{print $6}' | sort | uniq -c | sort -rn | head -12 | sed 's/^/   /'
+
+sec "modules that failed to load"
+dmesg 2>/dev/null | grep -iE 'module.*(fail|error|denied)|Unknown symbol|disagrees about' | head -6 | sed 's/^/   /'
+echo "  loaded: $(lsmod | grep -vc '^Module')"
+
+sec "verdict inputs"
+echo "  uptime          = $(cut -d' ' -f1 /proc/uptime)s"
+echo "  kernel taint    = $(cat /proc/sys/kernel/tainted)  (0x1000=out-of-tree, 0x200=warn, 0x2000=unsigned)"
+echo "  oom kills       = $(dmesg 2>/dev/null | grep -ic 'out of memory\|oom-kill')"
