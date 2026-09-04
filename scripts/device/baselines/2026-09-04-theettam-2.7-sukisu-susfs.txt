@@ -13,7 +13,9 @@
 # "throttled_during_run" column before believing any CPU delta.
 #
 # WHAT IS NOT IN HERE. Battery drain: adb runs over USB so the phone is always
-# charging and current_now is not drain. VoLTE: no SIM has ever been inserted.
+# charging and current_now is not drain. VoLTE is not benchmarked here either,
+# but it IS verified: a call to 198 on 2026-09-04 reached telecom=ACTIVE over
+# NR_SA with audio confirmed by ear. See docs/BOOT-NOTES.md Rule 10.
 #
 
 === run conditions (these decide whether the numbers mean anything) ===

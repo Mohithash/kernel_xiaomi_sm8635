@@ -360,9 +360,10 @@ grafts onto, so those flavors weren't independently re-validated against 176):
   that far), 42+ min uptime with load ~1.3 and no visible misbehaviour.
   **Not verified yet**: `dmesg` (klogctl is root-only on Android, so "no
   oops/`disagrees about version`" is unconfirmed — the plain flavor has no
-  `su`), and **VoLTE/IMS could not be tested because no SIM was inserted**
-  (`gsm.sim.state=[ABSENT,ABSENT]`; the OUT_OF_SERVICE state is that, not a
-  kernel fault). Both need the rooted flavor + a SIM before promotion.
+  `su`), and VoLTE/IMS, which could not be tested at the time because no SIM
+  was inserted (`gsm.sim.state=[ABSENT,ABSENT]`; the OUT_OF_SERVICE state was
+  that, not a kernel fault). Both were closed out later — see the rooted boot
+  record and the telephony entry below.
 - **Boot record, 2026-09-03 (later) — the SukiSU-Ultra + SUSFS lts176
   flavor boots and roots on the same peridot.** Flashed with OrangeFox
   sideload, then the SukiSU manager (v4.2.0) shows Working / driver 40901-2
@@ -377,8 +378,25 @@ grafts onto, so those flavors weren't independently re-validated against 176):
   every boot: `drivers/spmi/spmi-pmic-arb.c:309` (`qcom_spmi_pmic` probing a
   PMIC address that answers "transaction failed" at 0.26 s) and
   `kernel/irq/manage.c:914` (`goodix_ts` gesture resume doing an unbalanced
-  IRQ 321 wake disable). postflash-check lists both as known. Still open
-  before promotion: a real VoLTE call (no SIM was in the phone all day).
+  IRQ 321 wake disable). postflash-check lists both as known.
+- **Telephony verified, 2026-09-04 — the last gate on the 176 promotion is
+  closed.** With a Jio SIM inserted (`gsm.sim.state=LOADED`, operator
+  "Jio True5G"), `dumpsys telephony.registry` reports
+  `mVoiceRegState=0(IN_SERVICE)` and `mDataRegState=0(IN_SERVICE)`, and the
+  whole IMS stack is up: `imsdaemon`, `org.codeaurora.ims`,
+  `ims-dataservice-daemon`, `ims_rtp_daemon`. A call to 198 (the carrier's
+  toll-free service line) reached `telecom=ACTIVE` / `mCallState=2` and held
+  it, and the maintainer confirmed hearing the IVR — so audio really flowed,
+  not just session setup.
+  Worth recording precisely what path it took: idle, the phone sat on
+  `IWLAN` (Wi-Fi calling) because `mobile_data=0`, but at call setup
+  `gsm.network.type` switched to **`NR_SA`** and stayed there for the whole
+  call. On this carrier that is VoNR over 5G standalone rather than VoLTE
+  over LTE — either way it is the real cellular IMS path through the modem,
+  which is the thing the ACK 176 merge could have broken. This is the check
+  Rule 0 exists for: `DEBUG_INFO_BTF=n` once broke calls on this fork while
+  registration still looked perfectly healthy, so registration state alone
+  was never going to settle it.
 - The SukiSU manager shows a red "Manager version (40900) and KernelSU
   driver version (40901) mismatch" banner with our `susfs_new` pin: the
   driver number is `git rev-list --count` of the branch we build from, the
