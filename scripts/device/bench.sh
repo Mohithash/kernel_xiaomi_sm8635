@@ -13,12 +13,18 @@
 #   adb shell su -c 'sh /data/local/tmp/bench.sh all' | tee after.txt
 #   diff before.txt after.txt
 #
-# Subcommands: cpu | gpu | io | launch | thermal | all   (default: all)
+# Subcommands: work | cpu | gpu | io | launch | thermal | all   (default: all)
 #
 # Needs root. Read-mostly: the only writes are /proc/sys/vm/drop_caches and a
 # bounded temp file under /data/local/tmp, removed on exit. It does not change
 # any tunable — measuring is not tuning, and a harness that edits what it
 # measures is worthless.
+#
+# DO NOT read /sys/devices/system/cpu/cpu*/dcvsh_freq_limit from this or any
+# other script on this device: a read sweep of those nodes coincided with an
+# immediate hard reset (no shutdown checkpoint, empty /sys/fs/pstore,
+# ro.boot.bootreason=reboot). cpuinfo_cur_freq gives the same information
+# safely.
 #
 # Written for mksh (/system/bin/sh). mksh predefines r/type/hash/history/
 # integer/local/nohup/stop/suspend as aliases, so no function may take those
@@ -31,6 +37,12 @@ TMP=/data/local/tmp/.bench.$$
 cleanup() { rm -rf "$TMP" 2>/dev/null; kill $(jobs -p) 2>/dev/null; }
 trap cleanup EXIT
 mkdir -p "$TMP" 2>/dev/null
+
+# mksh evaluates $(( )) in 32 bits here: a nanosecond delta above 2^31 ns
+# (~2.147 s) wraps and comes back negative. Measured: a 3720 ms silver-core run
+# printed -574 ms. Every ns delta therefore goes through awk, which uses
+# doubles. Same class of trap as the external-printf E2BIG note above.
+ms_since() { awk -v a="$1" -v b="$(date +%s%N)" 'BEGIN{printf "%d", (b-a)/1000000}'; }
 
 say()  { printf '%-26s %s\n' "$1" "$2"; }
 head2(){ echo; echo "=== $1 ==="; }
@@ -61,6 +73,26 @@ preconditions() {
   say cpu-ceilings "policy0=$(cat /sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq) policy3=$(cat /sys/devices/system/cpu/cpufreq/policy3/scaling_max_freq) policy7=$(cat /sys/devices/system/cpu/cpufreq/policy7/scaling_max_freq)"
   say gpu-ceiling "$(cat /sys/class/kgsl/kgsl-3d0/devfreq/max_freq)"
   warn "mi_thermald re-asserts these ceilings every 2000 ms from a 25 C step curve; a run is only comparable with another run at a similar composite temperature"
+
+  # The composite mi_thermald actually steps on, recomputed from the raw zones.
+  # It is NOT a CPU temperature: cpu_therm carries a negative weight, and
+  # battery plus wifi_therm together carry 63% of it, so the CPU cap on this
+  # phone tracks board and battery heat. Reconstructing it here lets a run say
+  # how close it was to the next step before the step happens.
+  VS0=$(for z in /sys/class/thermal/thermal_zone*; do
+          t=$(cat $z/type 2>/dev/null); v=$(cat $z/temp 2>/dev/null)
+          case "$t" in
+            cpu_therm) echo "-26 $v" ;; battery) echo "301 $v" ;;
+            charger_therm0) echo "147 $v" ;; wifi_therm) echo "330 $v" ;;
+            pa_therm0) echo "36 $v" ;; pa_therm1) echo "119 $v" ;;
+            quiet_therm) echo "-2 $v" ;;
+          esac
+        done | awk '{s+=$1*$2} END {if (s) printf "%d", s/1000 + 2015}')
+  say composite-recomputed "${VS0:-?} mC  (next cap step at 37000)"
+  [ -n "$VS0" ] && [ "$VS0" -gt 35000 ] 2>/dev/null && warn "composite is within 2 C of the 37 C step: the ceiling will very likely move mid-run"
+
+  BUSY=$(ps -A -o pid,args 2>/dev/null | grep -cE '(bench\.sh|awk .*BEGIN|dd if=/dev/zero)' )
+  [ "${BUSY:-0}" -gt 3 ] && warn "other load is running ($BUSY matching processes): numbers will be polluted"
 }
 
 # ---------------------------------------------------------------------------
@@ -88,6 +120,38 @@ cpu_load_start() {   # cpu_load_start <cpulist>
   for p in $LOAD_PIDS; do echo "$p" > "$BENCH_CGROUP/cgroup.procs" 2>/dev/null; done
 }
 cpu_load_stop() { kill $LOAD_PIDS 2>/dev/null; wait 2>/dev/null; LOAD_PIDS=""; }
+
+# Fixed work, timed. Residency says which OPP was held; this says how long real
+# work took, which is the question a tuning change has to answer. One awk
+# process, pure ALU, no I/O and no allocation, so it moves when the scheduler or
+# an OPP limit moves and does not when only memory bandwidth changes. The first
+# two iterations are discarded: they run 10-25% slow while the governor ramps.
+WORK="${BENCH_WORK:-12000000}"
+bench_cpu_work() {
+  head2 "CPU — time to complete fixed work (${WORK} iterations, best of ${REPS} after 2 warmups)"
+  echo "  cluster  cpu  best_ms  median_ms  spread_%  cap_MHz_during"
+  for spec in "0:policy0" "4:policy3" "7:policy7"; do
+    c=${spec%%:*}; pol=${spec#*:}
+    CAP=$(cat /sys/devices/system/cpu/cpufreq/$pol/scaling_max_freq)
+    : > "$TMP/work"
+    I=0
+    while [ $I -lt $(( REPS + 2 )) ]; do
+      T0=$(date +%s%N)
+      taskset "$(printf '%x' $((1 << c)))" awk -v n="$WORK" 'BEGIN{x=0;for(i=0;i<n;i++)x=x+i}' >/dev/null 2>&1
+      [ $I -ge 2 ] && ms_since "$T0" >> "$TMP/work" && echo >> "$TMP/work"   # discard 2 warmups
+      I=$(( I + 1 ))
+    done
+    CAP2=$(cat /sys/devices/system/cpu/cpufreq/$pol/scaling_max_freq)
+    sort -n "$TMP/work" | awk -v pol="$pol" -v c="$c" -v cap="$CAP" -v cap2="$CAP2" '
+      {v[NR]=$1} END {
+        if (NR==0) { printf "  %-7s  %-3s  (no timings)\n", pol, c; exit }
+        printf "  %-7s  %-3s  %-7d  %-9d  %-8.1f  %s\n", pol, c, v[1], v[int((NR+1)/2)],
+               (v[1]>0 ? 100*(v[NR]-v[1])/v[1] : 0),
+               (cap==cap2 ? cap/1000 : cap/1000 "->" cap2/1000 " STEPPED")
+      }'
+  done
+  echo "  lower ms is faster. spread_% is (max-min)/min: above ~10% the run was disturbed"
+}
 
 bench_cpu() {
   head2 "CPU — mean sustained clock under load (${SECS}s per cluster)"
@@ -176,8 +240,7 @@ bench_io() {
     sync; echo 3 > /proc/sys/vm/drop_caches
     T0=$(date +%s%N)
     dd if="$SRC" of=/dev/null bs=1M >/dev/null 2>&1
-    T1=$(date +%s%N)
-    MS=$(( (T1 - T0) / 1000000 ))
+    MS=$(ms_since "$T0")
     [ "$MS" -gt 0 ] && R=$(( SZ * 1000 / MS )) || R=0
     echo "  run $((I+1)): ${MS} ms  ${R} MB/s"
     [ "$R" -gt "$BEST" ] && BEST=$R
@@ -236,8 +299,9 @@ case "${1:-all}" in
   io)      preconditions; bench_io ;;
   launch)  preconditions; bench_launch ;;
   thermal) preconditions; bench_thermal ;;
-  all)     preconditions; bench_thermal; bench_cpu; bench_gpu; bench_io; bench_launch; bench_thermal ;;
-  *)       echo "usage: bench.sh [cpu|gpu|io|launch|thermal|all]"; exit 2 ;;
+  work)    preconditions; bench_cpu_work ;;
+  all)     preconditions; bench_thermal; bench_cpu_work; bench_cpu; bench_gpu; bench_io; bench_launch; bench_thermal ;;
+  *)       echo "usage: bench.sh [work|cpu|gpu|io|launch|thermal|all]"; exit 2 ;;
 esac
 echo
 echo "=== done: $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
