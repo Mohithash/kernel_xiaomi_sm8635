@@ -91,8 +91,11 @@ preconditions() {
   say composite-recomputed "${VS0:-?} mC  (next cap step at 37000)"
   [ -n "$VS0" ] && [ "$VS0" -gt 35000 ] 2>/dev/null && warn "composite is within 2 C of the 37 C step: the ceiling will very likely move mid-run"
 
-  BUSY=$(ps -A -o pid,args 2>/dev/null | grep -cE '(bench\.sh|awk .*BEGIN|dd if=/dev/zero)' )
-  [ "${BUSY:-0}" -gt 3 ] && warn "other load is running ($BUSY matching processes): numbers will be polluted"
+  # Name what else is running rather than counting: this script and its own load
+  # processes would otherwise count themselves and cry wolf on every run.
+  OTHERS=$(ps -A -o args 2>/dev/null | grep -vE 'bench\.sh|runbench|grep|ps -A|^\[' \
+           | grep -E 'stress|sysbench|monkey|simpleperf|dd if=/dev/zero' | head -3)
+  [ -n "$OTHERS" ] && { warn "other load is running - numbers will be polluted:"; echo "$OTHERS" | sed 's/^/        /'; }
 }
 
 # ---------------------------------------------------------------------------
@@ -188,8 +191,20 @@ bench_cpu() {
 bench_gpu() {
   head2 "GPU — clock residency under UI load (${SECS}s)"
   D=/sys/class/kgsl/kgsl-3d0
-  [ "$WAKE" = Awake ] || { echo "  skipped: screen not Awake (DISPLAY_INACTIVE pins 255 MHz)"; return; }
+  # Re-assert here rather than trusting the $WAKE read from preconditions: in a
+  # full run this section starts minutes later, and a baseline once measured the
+  # GPU entirely at 255 MHz with 0% busy because the display had gone inactive
+  # in between. The ceiling itself is the reliable tell - DISPLAY_INACTIVE pins
+  # GPUMaxFreq to 255000000 - so check that, not just wakefulness.
+  input keyevent KEYCODE_WAKEUP >/dev/null 2>&1
+  sleep 2
   CEIL=$(cat $D/devfreq/max_freq)
+  if [ "$CEIL" = 255000000 ]; then
+    echo "  SKIPPED: GPUMaxFreq is pinned at 255 MHz (DISPLAY_INACTIVE)."
+    echo "  The display went inactive before this section started. Raise"
+    echo "  screen_off_timeout for the whole run, or measure with: bench.sh gpu"
+    return
+  fi
   cat $D/devfreq/trans_stat > "$TMP/gs.a" 2>/dev/null
 
   # UI load without installing anything: repeated scrolls on the launcher.
@@ -208,11 +223,20 @@ bench_gpu() {
 
   say ceiling_MHz "$(( CEIL / 1000000 ))"
   say mean_busy_pct "$(( N > 0 ? BUSY / N : 0 ))  (${N} samples)"
-  # trans_stat lists 'freq: <time_ms>' rows after the transition matrix.
+  # trans_stat rows are "<freq>: <matrix...> <time_ms>", except the row for the
+  # CURRENT frequency, which devfreq prefixes with '*'. That shifts every field
+  # by one, so keying on $1 alone yields the key "*": the before/after keys stop
+  # matching and the delta comes back as the whole cumulative total. A 20 s
+  # window once reported 3337960 ms this way.
   awk '
-    NR==FNR { if ($1 ~ /^[0-9]+:?$/) { f=$1; sub(":","",f); a[f]=$NF } next }
-    { if ($1 ~ /^[0-9]+:?$/) { f=$1; sub(":","",f); d=$NF-a[f]; if (d>0) { tot+=d; printf "  %-12s %8d ms\n", f/1000000" MHz", d } } }
-    END { if (tot>0) printf "  %-12s %8d ms total\n", "", tot; else print "  (no GPU residency delta - load did not reach the GPU)" }
+    function freq(  f) { f = ($1 == "*") ? $2 : $1; sub(":", "", f); return f }
+    /From|time\(ms\)|Total transition/ { next }
+    $0 !~ /[0-9]:/ { next }
+    NR==FNR { a[freq()] = $NF; next }
+    { f = freq(); d = $NF - a[f]
+      if (d > 0) { tot += d; printf "  %-12s %8d ms\n", f/1000000 " MHz", d } }
+    END { if (tot > 0) printf "  %-12s %8d ms in the window\n", "total", tot
+          else print "  (no GPU residency delta - the load never reached the GPU)" }
   ' "$TMP/gs.a" "$TMP/gs.b"
 }
 
