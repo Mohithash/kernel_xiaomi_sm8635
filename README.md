@@ -284,6 +284,9 @@ scripts/ci/symvers-diff.sh  ·  scripts/ci/kmi-baseline/<flavor>.symvers
 # after flashing: on-device PASS/FAIL gate, and what a release must satisfy
 scripts/device/postflash-check.sh  ·  docs/RELEASE-CHECKLIST.md  ·  docs/RELEASE-TEMPLATE.md
 
+# prove a tuning change did something: run before and after, diff the two
+scripts/device/bench.sh
+
 # upstream drift, checked on the 5th and 20th
 upstreams.json  ·  scripts/ci/check-upstreams.py
 ```
