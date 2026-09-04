@@ -292,7 +292,7 @@ tests (I/O scheduler choice, softlockup watchdog period, `sync_on_suspend`)
 belong in the Theettam Tweaks userspace module as runtime sysctls, not a
 kernel default — they are reversible without a new flash there.
 
-## Rule 10 — ACK android14-6.1.176 bump: merged on branch `theettam-2.7-lts176`, NOT on theettam-2.7
+## Rule 10 — ACK android14-6.1.176 bump (promoted to theettam-2.7 on 2026-09-04)
 
 `android14-6.1.176_r00`, 639 commits ahead of our 175 base
 (`git rev-list --count android14-6.1.175_r00..android14-6.1.176_r00`), has
@@ -489,6 +489,154 @@ an Image-only flash (Rule 7) cannot deliver it, however loud the bulletin.
   and module BTF only matters for tracing on module types. Inherent to
   Image-only flashing with stock modules, not a regression, and unrelated to
   the `DEBUG_INFO_BTF=n` breakage in Rule 0 (that removed vmlinux BTF).
+
+## Rule 12 — who actually owns the clocks on this device (measured 2026-09-04)
+
+Both big CPU clusters and the GPU run below their hardware maximum, always, and
+none of it is the kernel's doing. Written down because two people have now
+assumed the kernel could tune it.
+
+**The GPU.** `cooling_device37` (type `gpu`) is bound to no thermal zone at all —
+every GPU zone binding resolves to `cooling_device36`, the kernel's own devfreq
+cooling device, which sits at state 0. `cooling_device37` is driven purely by
+`/vendor/bin/mi_thermald`, from `[INDIA-MONITOR-GPU]` in the decrypted regional
+map: one trip at **15 °C** against a composite sensor that reads 33–36 °C, so it
+is tripped permanently and asks for cooling state 3 forever.
+
+Here the kernel does help. `drivers/thermal/qcom/qti_devfreq_cdev.c` carries
+commit `80accb269363`, which remaps mid-range cooling states (start 1, divider 2,
+critical tail 2) and turns that requested state 3 into a stored 2 — 950 MHz
+instead of 900. **Measured on device**, driving `cur_state` with the power-HAL
+ceiling lifted:
+
+```
+written 0 -> stored 0 -> max_freq 1100000000     written 4 -> stored 3 -> 900000000
+written 1 -> stored 1 ->         1000000000      written 3 -> stored 2 -> 950000000
+written 2 -> stored 2 ->          950000000
+```
+
+Writing 4 storing 3, and 3 storing 2, is the remap running. At state 0 the GPU
+reaches the full 1100 MHz, so the hardware and the OPP table are fine; only the
+cooling request holds it down.
+
+**The CPU — and this is the part that surprises.** The caps are real:
+
+```
+policy0 (silver) scaling_max 2016000 == cpuinfo_max      no cap
+policy3 (gold)   scaling_max 2572800 vs 2707200 available   top 2 OPPs unreachable
+policy7 (prime)  scaling_max 2668800 vs 2918400 available   top 2 OPPs unreachable
+```
+
+and they come from the same daemon, via step curves whose **first step trips at
+25 °C** — a temperature a phone in use is never below:
+
+```
+[INDIA-SS-CPU3] trig 25000 37000 39000 ...  target 2572800 2188800 1920000 ...
+[INDIA-SS-CPU7] trig 25000 37000 39000 ...  target 2668800 2304000 2150400 ...
+```
+
+The composite sensor read 32969 when measured, i.e. past step 0 and below step 1,
+so the applied ceilings are exactly `2572800` and `2668800` — precisely what the
+sysfs files read.
+
+**But the CPU half of `80accb269363` does nothing on this device.** Those targets
+are frequencies in kHz, not cooling states: `strings /vendor/bin/mi_thermald`
+contains `/sys/devices/system/cpu/cpu%d/cpufreq/scaling_max_freq`, and the daemon
+writes the ceiling directly. The three cooling devices that `qti_cpufreq_cdev.c`
+registers and that the commit remaps — `cpufreq-cpu0`, `cpufreq-cpu3`,
+`cpufreq-cpu7` — all read `cur_state=0`, unused. No CPU cooling device is bound
+to a thermal zone either. So the CPU remap is inert here; keep it (it is correct,
+and it would apply on a ROM that drives the cooling devices) but do not expect it
+to buy anything on this one.
+
+**Consequence for tuning.** The CPU ceilings are not reachable from the kernel or
+from the device tree: `mi_thermald`, `thermald-devices.conf` and the regional map
+are extracted vendor blobs, the map is encrypted, and the daemon re-asserts every
+2000 ms, so a userspace module cannot hold a higher value either. Changing them
+means replacing the thermal policy wholesale, which is a real thermal decision
+wanting sustained-load measurement — not a tweak. Do not "fix" this by raising
+`scaling_max_freq` somewhere and calling it a win; it will be overwritten within
+two seconds.
+
+## Rule 11 — security review against ACK past 176 (2026-09-03): what was taken, what was refused, and why
+
+Scoped to code that is actually **linked into the Image** (`=y`). Anything that
+lives in a stock `vendor_dlkm`/`system_dlkm` module is Xiaomi's to fix via OTA;
+an Image-only flash (Rule 7) cannot deliver it, however loud the bulletin.
+
+- **Taken: `39905027d023` "ANDROID: netfilter: xt_quota2: fix UAF in
+  q2_get_counter error path"** (Todd Kjos, ACK android14-6.1-lts just past
+  176, Bug 499166786). `xt_quota2` is Android's own per-UID accounting match
+  and is `=y` here, so it is in the Image. The bug: the new counter is put on
+  `counter_list` and the lock dropped before `proc_create_data()`; if that
+  fails, the old error path did `list_del()`+`kfree()` unconditionally while
+  another thread could already hold a reference. Needs CAP_NET_ADMIN and a
+  procfs allocation failure, so not an app-level bug, but the fix is three
+  lines of refcount discipline with no struct or export change (KMI gate:
+  `changed=0`). On both `theettam-2.7` and `theettam-2.7-lts176`.
+- **Refused: the fscrypt trio** `c3e0109ec5e6` (avoid dynamic allocation in
+  `fscrypt_get_devices`), `2fd20b5fee78` (replace `mk_users` keyring with a
+  list), `f20ce2195cc1` (key setup with multiple data unit sizes). fscrypt is
+  very much in this Image (`FS_ENCRYPTION`, inline crypt) and the third one
+  reads like a correctness fix worth having. It is a trap: ACK could only land
+  them by filing a declared ABI break (`c0df533a5806` adds them to
+  `abi_gki_aarch64.stg.allowed_breaks`: `struct fscrypt_master_key` shrinks
+  from 872 to 368 bytes, and `struct fscrypt_operations` gains
+  `get_devices_new` by **consuming `android_kabi_reserved1`**). That struct is
+  embedded in every encrypting filesystem's superblock ops; Google absorbs it
+  by rebuilding the whole device image, we flash Image only. Never for this
+  fork, unless a full LTS bump Google has shipped to peridot carries it.
+- **Kept against ACK's revert: `47455f9704a1` "usb: gadget: udc: fix UAF in
+  usb_gadget_state_work (KABI-safe)"**, which 176 carries and ACK later
+  reverted as `e70cf19d88cf`. The revert's own reason is "presubmit failures
+  when backported to 6.12", to be replaced by an internal teardown flag in
+  `struct usb_udc`: a 6.12 build problem plus a refactor plan, not a 6.1
+  runtime regression, and both versions are explicitly KABI-safe. The path is
+  hot on peridot (`usb_gadget_set_state`/`usb_udc_vbus_handler` are exports
+  the dwc3 vendor module hits on every cable event) and the 176 build with it
+  booted. Do not "sync" this revert; re-evaluate when ACK lands the flag.
+- **ASB-2026-08-03_14-6.1: nothing for us.** It is nine commits past 176;
+  seven are vendor hooks/symbol lists/a kernel-doc fix. The two real fixes,
+  `cad04476381e` + `b178698e5ac5` (Bluetooth SCO sleeping-under-spinlock and
+  `sco_conn_ready` UAF), are `net/bluetooth/sco.c` only, and `CONFIG_BT=m`:
+  that code is `bluetooth.ko` in stock `system_dlkm`. Cherry-picking them
+  changes nothing on the phone; the device gets them from Xiaomi's OTA.
+- **Qualcomm bulletins (Jun–Sep 2026): no actionable item, structurally.**
+  The complete Qualcomm-authored code in this Image is `ARCH_QCOM` plumbing
+  plus `PCIE_QCOM`, `INTERCONNECT_QCOM`, `QCOM_GDSC`, `QCOM_GENI_SE`,
+  `SERIAL_QCOM_GENI`, `QCOM_SMEM_STATE`, `QCOM_EBI2`, SPMI regmap,
+  `USB_DWC3_QCOM`, the SCMI transports and the Gunyah core; there is not one
+  `CONFIG_*QCOM*=m`/`*MSM*=m`. KGSL, camera, display, audio, WLAN, IPA/rmnet,
+  video, qseecom, fastrpc are all vendor modules, which is where Qualcomm's
+  kernel CVEs overwhelmingly land (e.g. CVE-2026-21385, KGSL, "limited,
+  targeted exploitation": `msm_kgsl.ko`, untouchable from here). Even `QRTR`
+  and `SLIMBUS` are not set, so the hand-resolved 176 merge conflicts in
+  `net/qrtr` and `drivers/slimbus` (Rule 10) affect no shipped code. The
+  per-CVE bulletin tables could not be read (client-side rendered); the
+  attack-surface list above is the verifiable statement.
+- **Hardening audit vs ACK 176 `gki_defconfig`: parity, nothing to flip.**
+  The full defconfig delta is 97 lines and the only security-relevant ones are
+  `MODULE_SIG`/`MODULE_SIG_PROTECT` off (the deliberate KernelSU accommodation:
+  anything with CAP_SYS_MODULE can insmod, inherent to a root kernel) and our
+  `KFENCE_DEFERRABLE=y`. Present and identical to ACK: `CFI_CLANG` (permissive
+  off), `SHADOW_CALL_STACK`, `KASAN_HW_TAGS`, `INIT_ON_ALLOC_DEFAULT_ON`,
+  `INIT_STACK_ALL_ZERO`, `HARDENED_USERCOPY`, `SLAB_FREELIST_RANDOM`/`HARDENED`,
+  `STACKPROTECTOR_STRONG`, `RANDOMIZE_BASE`, `FORTIFY_SOURCE`, `UBSAN_BOUNDS`
+  (+trap), `BUG_ON_DATA_CORRUPTION`, `DEBUG_LIST`, `STRICT_KERNEL_RWX`/
+  `MODULE_RWX`, `VMAP_STACK`, PAN/E0PD/EPAN/`UNMAP_KERNEL_AT_EL0`, pointer
+  auth, `STATIC_USERMODEHELPER`, `DEVMEM`/`PROC_KCORE` off, `SECCOMP_FILTER`.
+  Checked and deliberately not proposed: `INIT_ON_FREE_DEFAULT_ON` (off in
+  ACK too, real runtime cost) and `SECURITY_DMESG_RESTRICT` (off in ACK,
+  Android sets the sysctl anyway).
+- **Open, needs the rooted probe: `BPF_UNPRIV_DEFAULT_OFF`.** The one
+  KMI-neutral knob the tree lacks. It is a one-way latch (initialises
+  `unprivileged_bpf_disabled` to 2, which cannot be lowered) and ACK leaves it
+  unset, so it is only worth taking if the ROM does *not* already write 1/2 by
+  sysctl. `scripts/device/postflash-check.sh` (`hardening-sysctls`, root-gated)
+  and `device-probe.sh` now read `unprivileged_bpf_disabled`, `kptr_restrict`,
+  `dmesg_restrict` and `bpf_jit_harden`; Android hides them from an
+  unprivileged shell, so this waits for a rooted boot. If the value is
+  already 1 or 2, close the item.
 
 ## Rule 12 — who actually owns the clocks on this device (measured 2026-09-04)
 

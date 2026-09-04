@@ -1,11 +1,11 @@
 <div align="center">
 
-<img src="assets/mbappu-banner.svg" alt="Theettam Kernel — Mbappu Edition — peridot — GKI 6.1.175" width="100%">
+<img src="assets/mbappu-banner.svg" alt="Theettam Kernel — Mbappu Edition — peridot — GKI 6.1.176" width="100%">
 
 <br>
 
 [![Release](https://img.shields.io/github/v/release/Mohithash/kernel_xiaomi_sm8635?style=for-the-badge&label=RELEASE&labelColor=0b1020&color=4f8cff)](../../releases/latest)
-[![Kernel](https://img.shields.io/badge/GKI-6.1.175-4ade80?style=for-the-badge&labelColor=0b1020)](https://android.googlesource.com/kernel/common/+/refs/tags/android14-6.1.175_r00)
+[![Kernel](https://img.shields.io/badge/GKI-6.1.176-4ade80?style=for-the-badge&labelColor=0b1020)](https://android.googlesource.com/kernel/common/+/refs/tags/android14-6.1.176_r00)
 [![SUSFS](https://img.shields.io/badge/SUSFS-v2.3.0-c084fc?style=for-the-badge&labelColor=0b1020)](https://gitlab.com/simonpunk/susfs4ksu)
 [![Downloads](https://img.shields.io/github/downloads/Mohithash/kernel_xiaomi_sm8635/total?style=for-the-badge&label=DOWNLOADS&labelColor=0b1020&color=fbbf24)](../../releases)
 [![License](https://img.shields.io/badge/license-GPL--2.0-60a5fa?style=for-the-badge&labelColor=0b1020)](COPYING)
@@ -59,7 +59,7 @@ Everything below is shared by **all** flavors, Premium included:
 > [!NOTE]
 > KSUN and SukiSU don't ship kernel-side SUSFS — those builds use a **hand-authored port** written for this
 > kernel. ReSukiSU implements SUSFS natively, so its pairing is the cleanest.
-> **All flavors are boot-tested on peridot at 6.1.175**, as is the bare base.
+> **All flavors are boot-tested on peridot at 6.1.176**, as is the bare base.
 >
 > DroidSpaces bootlooped twice during bring-up before the KABI-safe config was found (`SYSVIPC`
 > relocated into `ANDROID_KABI_RESERVE` slots so stock `vendor_dlkm` still loads). It now boots
@@ -146,12 +146,12 @@ symbol ships without appearing in a defconfig, and a defconfig line can be overr
 
 | | Feature | Why it's here |
 |:--|:--|:--|
-| 🐧 | **GKI 6.1.175** | First LTS bump past 6.1.173 for peridot — a real 3-way merge of ACK `android14-6.1-lts` (1010 commits, 6 conflicts). [How ↗](docs/upgrading-gki-device-kernel-lts.md) |
+| 🐧 | **GKI 6.1.176** | LTS: 6.1.173 -> 6.1.175 -> 6.1.176 for peridot — a real 3-way merge of ACK `android14-6.1-lts` (1010 commits, 6 conflicts). [How ↗](docs/upgrading-gki-device-kernel-lts.md) |
 | ⚡ | **BORE** scheduler | Burst-Oriented Response Enhancer. Touch and scroll are *bursty*; BORE gives short-burst tasks priority, which is the UI. `sysctl kernel.sched_bore=0` to disable live |
 | 💾 | **ADIOS** I/O scheduler *(default)* | Adaptive Deadline. App launch is latency-bound, not throughput-bound |
 | 🌐 | **BBRv3** *(default TCP CC)* | Real v3 (`BBR_VERSION 3`) with the ECN/loss response v1 lacks |
 | 🚦 | **CAKE** *(available)* | For links whose bandwidth you can name — tether, wifi. Not default; see below |
-| 🎭 | **Stock GKI version string** | Reports `6.1.175-android14-11-…` — no custom kernel branding |
+| 🎭 | **Stock GKI version string** | Reports `6.1.176-android14-11-…` — no custom kernel branding |
 | 🔓 | **`MODULE_SIG=n`** | So KernelSU-family modules load |
 | 🛡 | **7 root flavors, SUSFS v2.3.0 on five** | 6 KSU-family + APatch. Including KernelSU-Next v3.3.0 + SUSFS — a pairing that doesn't exist upstream |
 | 🔒 | **`/proc/config.gz` scrubbed** | Since 2.7 the embedded config carries no `CONFIG_KSU*` lines, so apps reading it see a stock GKI config (2.6 and earlier exposed `CONFIG_KSU=y`). The node itself stays: `system_server` needs it |

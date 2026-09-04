@@ -349,7 +349,7 @@ int pkvm_create_hyp_vm(struct kvm *host_kvm)
 void pkvm_destroy_hyp_vm(struct kvm *host_kvm)
 {
 	struct kvm_pinned_page *ppage;
-	struct mm_struct *mm = current->mm;
+	struct mm_struct *mm = host_kvm->mm;
 	struct rb_node *node;
 
 	if (!host_kvm->arch.pkvm.handle)
@@ -408,7 +408,7 @@ static int rb_ppage_cmp(const void *key, const struct rb_node *node)
 void pkvm_host_reclaim_page(struct kvm *host_kvm, phys_addr_t ipa)
 {
 	struct kvm_pinned_page *ppage;
-	struct mm_struct *mm = current->mm;
+	struct mm_struct *mm = host_kvm->mm;
 	struct rb_node *node;
 
 	write_lock(&host_kvm->mmu_lock);

@@ -25,7 +25,7 @@ on:
         required: false
         default: ""
   push:
-    branches: [ theettam-2.7 ]
+    branches: [ theettam-2.7, theettam-2.7-lts176 ]
     paths-ignore: [ '**/*.md', 'docs/**', 'assets/**' ]
 
 concurrency:

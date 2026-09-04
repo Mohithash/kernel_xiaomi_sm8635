@@ -1076,6 +1076,7 @@
   down_read
   down_write
   find_vma
+  mtree_load
   __mmap_lock_do_trace_acquire_returned
   __mmap_lock_do_trace_released
   __mmap_lock_do_trace_start_locking

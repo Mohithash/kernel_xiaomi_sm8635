@@ -28,7 +28,8 @@ xfrm_register_km 0xdc63593a   # ACK 176 xfrm_mgr change; plain flavor booted 202
 
 The gate prints such symbols as `ACCEPTED` and still fails on any other
 CHANGED/REMOVED symbol. Keep the file on the branch that carries the shift
-(it does not exist on `theettam-2.7`, which stays strict), and delete entries
+(it now lives on `theettam-2.7` itself, since that branch carries the 176
+merge), and delete entries
 when the baselines are regenerated from a boot-tested build of that branch.
 Never add a symbol here on reasoning alone — the whole point of the gate is
 that reasoning about KMI has been wrong twice (Rule 2).

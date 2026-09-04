@@ -140,6 +140,9 @@ DECLARE_HOOK(android_vh_read_lazy_flag,
 DECLARE_HOOK(android_vh_set_tsk_need_resched_lazy,
 	TP_PROTO(struct task_struct *p, struct rq *rq, int *need_lazy),
 	TP_ARGS(p, rq, need_lazy));
+DECLARE_HOOK(android_vh_signal_coredump_check,
+	TP_PROTO(struct task_struct *p, struct ksignal *ksig, bool *skip_coredump),
+	TP_ARGS(p, ksig, skip_coredump));
 
 #endif /* _TRACE_HOOK_DTASK_H */
 

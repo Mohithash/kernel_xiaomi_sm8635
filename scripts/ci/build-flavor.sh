@@ -80,7 +80,7 @@ log "flavor=$FLAVOR  clang: $(clang --version | head -1)"
 if [ "${ALLOW_OTHER_CLANG:-0}" != 1 ]; then
   clang --version | head -1 | grep -qF "$NEUTRON_CLANG_ID" || die "clang is not the pinned release toolchain ($NEUTRON_CLANG_ID, build $NEUTRON_BUILD); set CLANG_DIR to it or ALLOW_OTHER_CLANG=1 for a deliberate experiment"
 fi
-grep -q '^SUBLEVEL = 175' Makefile || die "base is not 6.1.175"
+grep -qE '^SUBLEVEL = (175|176)' Makefile || die "base is not 6.1.175/176"
 grep -q '^CONFIG_SCHED_BORE=y' arch/arm64/configs/gki_defconfig || die "BORE missing from gki_defconfig"
 grep -q '^CONFIG_MQ_IOSCHED_ADIOS=y' arch/arm64/configs/gki_defconfig || die "ADIOS missing from gki_defconfig"
 if [ "${ALLOW_DIRTY:-0}" != "1" ]; then

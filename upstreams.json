@@ -5,7 +5,7 @@
     "kind": "git-tags",
     "url": "https://android.googlesource.com/kernel/common",
     "tag_glob": "refs/tags/android14-6.1.*_r00",
-    "current": "android14-6.1.175_r00",
+    "current": "android14-6.1.176_r00",
     "note": "A new LTS tag needs a real 3-way merge with hand-resolved conflicts. Never auto-merge to a release."
   },
   "guidixx": {

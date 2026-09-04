@@ -711,3 +711,11 @@ xt_register_matches
 xt_unregister_matches
 xt_register_targets
 xt_unregister_targets
+
+# coredump check
+__tracepoint_android_vh_signal_coredump_check
+__traceiter_android_vh_signal_coredump_check
+
+# required by xiaomi new symbols
+memory_cgrp_subsys_on_dfl_key
+
