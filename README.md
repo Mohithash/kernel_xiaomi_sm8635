@@ -254,14 +254,14 @@ enough to tell a crowning problem from a real bug.
 
 ## <img src="https://img.shields.io/badge/-07-fbbf24?style=flat-square" height="18"> Building
 
-The kernel source, docs and CI live on the **[`theettam-2.7`](../../tree/theettam-2.7)** branch
+The kernel source, docs and CI live on the **[`theettam-2.8`](../../tree/theettam-2.8)** branch
 (history continues from tag `v2.6`). The branches named `peridot-6.1.175` and `main` are historical:
 `peridot-6.1.175` is a squashed source snapshot with no history and no CI — never build from or merge into it.
 
 ```bash
 # build any flavor locally, exactly as CI does (run in a git worktree — the SUSFS
 # integration modifies tracked files)
-git worktree add --detach ../wt-sukisu theettam-2.7
+git worktree add --detach ../wt-sukisu theettam-2.8
 cd ../wt-sukisu && CLANG_DIR=/path/to/neutron-clang scripts/ci/build-flavor.sh sukisu-susfs
 #   flavors: plain ksun-plain ksun-susfs sukisu-susfs ksun-susfs-droidspaces resukisu-susfs premium apatch
 
@@ -296,6 +296,19 @@ but shifts an exported CRC fails the KMI gate instead of shipping a bootloop.
 ---
 
 ## <img src="https://img.shields.io/badge/-08-fbbf24?style=flat-square" height="18"> Changelog
+
+### 2.8 — 2026-09-05
+
+- Lengthened the RCU lazy-callback flush deadline 10 s → 30 s; `rcutree.jiffies_till_flush`
+  exposed read-only (`kernel/rcu/tree_nocb.h`)
+- Extended the f2fs no-victim background GC re-poll 5 → 15 min (`DEF_GC_THREAD_NOGC_SLEEP_TIME`)
+- Fixed a 1-byte overflow in the Boeffla wakelock blocker's sysfs list parse (`%s` → `%1023s`)
+- Removed a duplicate `set_task_ioprio()` in `f2fs_start_gc_thread()`
+- Fixed `postflash-check.sh`: known WARN_ON sites matched by suffix, so ROM-built modules pass
+- Added BOOT-NOTES Rule 13: the idle/battery research, what was taken and what was refuted
+- Fixed BOOT-NOTES Rule 9 on HZ (module loading does not answer the timer question); dropped the
+  duplicated Rules 11/12
+- Added the 2.8 first-boot bench record (`scripts/device/baselines/`)
 
 ### 2.7 — 2026-09-04
 
