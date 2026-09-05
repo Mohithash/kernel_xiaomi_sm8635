@@ -263,8 +263,22 @@ lts176 plain flavor, unprivileged reads):**
   menu teo qcom-cpu-lpm`, LPM module loaded). The Image's `menu`/`teo` choice is
   moot on peridot; do not spend effort there.
 - `HZ=300` is what runs (`/proc/config.gz`: `CONFIG_HZ_300=y`, `NO_HZ_IDLE`), and
-  the full stock `vendor_dlkm` set (445 modules) loads against it. The
-  "vendor modules expect HZ=250" worry is retired.
+  the full stock `vendor_dlkm` set (445 modules) loads against it. That
+  settles *loading* only. `HZ` is in no CRC, so the symvers gate is blind
+  to it, and the stock modules were compiled against Google's GKI, where
+  `HZ=250`: every `msecs_to_jiffies(<constant>)` and bare `HZ` in those
+  modules was folded at their build (`include/linux/jiffies.h`, the
+  `__builtin_constant_p` path), so their timeouts and polling periods are
+  expressed in 250 Hz jiffies and run about 17 % short on a 300 Hz core.
+  Only the non-constant path goes through the exported
+  `__msecs_to_jiffies()` and gets the right answer. Whether that costs
+  power (shorter vendor poll intervals) or correctness (early timeouts)
+  is unmeasured. 300 Hz comes from `bf54ced6af76` (Kconfig.hz default)
+  and `6a7635e0c999` (gki_defconfig); the former's message says stutter
+  reports were fixed by *restoring the default* and 300 was then chosen
+  on user perception, so there is no measurement either way. Going back
+  to 250 needs both lines changed and a 120 Hz frame-pacing A/B before
+  it is anything more than an experiment. Open.
 - MTE is **off at boot**: stock cmdline carries `kasan=off`
   (`kasan.page_alloc.sample=10 kasan.stacktrace=off` too) and `mte` is absent
   from `/proc/cpuinfo`. `CONFIG_KASAN_HW_TAGS=y` stays only because GKI/KMI
