@@ -35,6 +35,7 @@
 #include <linux/device.h>
 #include <linux/miscdevice.h>
 #include <linux/printk.h>
+#include <linux/build_bug.h>
 #include "boeffla_wl_blocker.h"
 
 
@@ -44,6 +45,10 @@
 
 char list_wl[LENGTH_LIST_WL] = {0};
 char list_wl_default[LENGTH_LIST_WL_DEFAULT] = {0};
+
+/* The sysfs parsers below use a fixed "%1023s" width; keep it tied to the buffers. */
+static_assert(LENGTH_LIST_WL == 1024);
+static_assert(LENGTH_LIST_WL_DEFAULT == 1024);
 
 extern char list_wl_search[LENGTH_LIST_WL_SEARCH];
 extern bool wl_blocker_active;
@@ -91,7 +96,7 @@ static ssize_t wakelock_blocker_store(struct device * dev, struct device_attribu
 		return -EINVAL;
 
 	// store user configured wakelock list and rebuild search string
-	sscanf(buf, "%s", list_wl);
+	sscanf(buf, "%1023s", list_wl);
 	build_search_string(list_wl_default, list_wl);
 
 	return n;
@@ -118,7 +123,7 @@ static ssize_t wakelock_blocker_default_store(struct device * dev, struct device
 		return -EINVAL;
 
 	// store default, predefined wakelock list and rebuild search string
-	sscanf(buf, "%s", list_wl_default);
+	sscanf(buf, "%1023s", list_wl_default);
 	build_search_string(list_wl_default, list_wl);
 
 	return n;
