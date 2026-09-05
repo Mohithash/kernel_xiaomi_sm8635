@@ -1,0 +1,94 @@
+# Theettam benchmark — 2.8-cold, FIRST BOOT, NOT a clean comparison
+#
+# Captured  : 2026-09-05, scripts/device/bench.sh all
+# Kernel    : 6.1.176-android14-11-ga3b9c44908dd-ab13320413, theettam-2.8-cold @ 925cb191
+# Flavor    : sukisu-susfs 2.8, Image repacked into the ROM's boot.img, fastboot-flashed
+# Device    : POCO F6 peridot, BestROM 3.0 20260905-1620 (theettam-a17 DT live, ROM-built modules)
+#
+# READ BEFORE COMPARING TO 2026-09-04. This run is compromised in three ways and is
+# kept only as a record of the first boot:
+#   1. uptime was 320 s on a slot the ROM had just OTA'd into: first launches of the
+#      cold-start apps, post-OTA housekeeping still running.
+#   2. the SukiSU manager was open in the foreground the whole run (10 s CPU, and
+#      surfaceflinger animating under it) - it perturbs the prime-cluster fixed-work
+#      spread (28.5 %) and is why the GPU section saw 2 % busy at 255 MHz.
+#   3. composite started at 34.8 C vs 37.0 C in the baseline: ceilings not matched.
+# What IS comparable: little/gold fixed-work (within 2 % of baseline), storage
+# (240 MB/s, identical). What is NEW and real: GPU ceiling 1000 MHz - the
+# theettam-a17 powerhint DefaultIndex 3->0 is live for the first time.
+# Cold-start (219/225 ms vs 193/144) is NOT attributable to the kernel on this
+# evidence; see the warm re-run captured after >= 1 h idle with the manager closed.
+#
+
+=== run conditions (these decide whether the numbers mean anything) ===
+kernel                     6.1.176-android14-11-ga3b9c44908dd-ab13320413
+uptime                     320.38s
+screen                     Awake
+charging                   usb_online=1 status=Full
+WARN  phone is charging over the adb cable: battery current is not drain, power figures are omitted
+sensor-composite           36742
+load-cgroup                /dev/cpuctl/top-app (uclamp.max=max)
+cpu-ceilings               policy0=2016000 policy3=2572800 policy7=2668800
+gpu-ceiling                1000000000
+WARN  mi_thermald re-asserts these ceilings every 2000 ms from a 25 C step curve; a run is only comparable with another run at a similar composite temperature
+composite-recomputed       34758 mC  (next cap step at 37000)
+
+=== thermal state ===
+  gpuss-0          37800 mC
+  quiet_therm      35872 mC
+  pa_therm0        36345 mC
+  charger_therm0   36805 mC
+  battery          34900 mC
+composite                  36742 (mi_thermald step input)
+gpu_cdev_state             255 of 255
+
+=== CPU — time to complete fixed work (12000000 iterations, best of 5 after 2 warmups) ===
+  cluster  cpu  best_ms  median_ms  spread_%  cap_MHz_during
+  policy0  0    3748     3769       1.4       2016
+  policy3  4    1537     1570       7.3       2572.8
+  policy7  7    1051     1270       28.5      2668.8
+  lower ms is faster. spread_% is (max-min)/min: above ~10% the run was disturbed
+
+=== CPU — mean sustained clock under load (20s per cluster) ===
+  cluster  mean_MHz  peak_MHz  ceiling_MHz  %_at_ceiling  throttled_during_run
+  policy0  2013      2016      2016         99.8          no
+  policy3  1530      2573      2573         15.8          no
+  policy7  1580      2669      2669         1.7           no
+  (mean_MHz is residency-weighted: sum(freq*ticks)/sum(ticks) across the window)
+  load ran in /dev/cpuctl/top-app; these are COMPARISON numbers, not peak-capability numbers -
+  a shell loop does not saturate the big clusters, so only compare runs made the same way
+
+=== GPU — clock residency under UI load (20s) ===
+ceiling_MHz                1000
+mean_busy_pct              2  (2183 samples)
+  633 MHz            33 ms
+  255 MHz         19300 ms
+  total           19333 ms in the window
+
+=== storage I/O (/data is /dev/block/dm-49) ===
+scheduler                  mq-deadline kyber [adios] bfq none
+nr_requests                126
+read_ahead_kb              512
+read_source                /data/app/~~e7WYjfFxlcV192GPQgwmmQ==/com.sukisu.ultra-C7XeCHTEfV-RzLDfmTutQQ==/base.apk (13 MiB)
+  run 1: 54 ms  240 MB/s
+  run 2: 56 ms  232 MB/s
+  run 3: 59 ms  220 MB/s
+  run 4: 60 ms  216 MB/s
+  run 5: 58 ms  224 MB/s
+best_read                  240 MB/s (cold cache each run)
+dm_stat_reads              13342 reads, 1847 writes
+
+=== app cold-start latency (median of 5) ===
+com.android.settings       median 219 ms   (runs: 205 207 219 222 311 )
+com.android.deskclock      median 225 ms   (runs: 220 222 225 242 289 )
+
+=== thermal state ===
+  gpuss-0          44600 mC
+  quiet_therm      37315 mC
+  pa_therm0        38350 mC
+  charger_therm0   39566 mC
+  battery          35400 mC
+composite                  36742 (mi_thermald step input)
+gpu_cdev_state             255 of 255
+
+=== done: 2026-09-05T16:28:18Z ===
