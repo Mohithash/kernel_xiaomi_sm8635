@@ -244,9 +244,20 @@ static bool wake_nocb_gp(struct rcu_data *rdp, bool force)
  * could be flushed much earlier for a number of other reasons
  * however, LAZY_FLUSH_JIFFIES will ensure no lazy callbacks are
  * left unsubmitted to RCU after those many jiffies.
+ *
+ * This is also the deadline the group-leader's non-deferrable
+ * nocb_timer is armed to when a lazy callback is bypass-queued
+ * (wake_nocb_gp_defer(), RCU_NOCB_WAKE_LAZY case below), so it is
+ * a real forced CPU wake out of idle, not just a bound on how long
+ * memory sits unreclaimed -- the lazy_rcu_shrinker already reclaims
+ * under actual memory pressure regardless of this timer, and the
+ * qhimark backlog check forces an earlier flush if callbacks pile
+ * up, so widening only this fixed deadline lowers idle wake cadence
+ * without changing either safety net.
  */
-#define LAZY_FLUSH_JIFFIES (10 * HZ)
+#define LAZY_FLUSH_JIFFIES (30 * HZ)
 static unsigned long jiffies_till_flush = LAZY_FLUSH_JIFFIES;
+module_param(jiffies_till_flush, ulong, 0444);
 
 #ifdef CONFIG_RCU_LAZY
 // To be called only from test code.
