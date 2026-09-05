@@ -590,6 +590,76 @@ wanting sustained-load measurement — not a tweak. Do not "fix" this by raising
 `scaling_max_freq` somewhere and calling it a win; it will be overwritten within
 two seconds.
 
+## Rule 13 — idle/battery research (2026-09-05): taken, refuted, and why
+
+Method: eight readers over the real tree, one per subsystem, each returning
+candidates plus every idea it rejected; ten Image-side candidates; each faced
+three independent refuters (mechanism on *this* device, KMI/boot, multitasking),
+any refute kills; survivors built as `plain` through the symvers gate, then
+reviewed against their own commit message. 46 agents, 63 ideas rejected at
+reading, 14 pre-existing issues surfaced. Screen-off drain is still unmeasured,
+so nothing below claims a number.
+
+**Taken (branch `theettam-2.8-cold`, all `changed=0` on the gate):**
+- `rcu`: `LAZY_FLUSH_JIFFIES` 10 s → 30 s, `rcutree.jiffies_till_flush` exposed
+  read-only. The nocb group leader's `nocb_timer` is `timer_setup(…, 0)`, not
+  deferrable, so the lazy deadline is a real idle-exit wake on `rcu_nocbs=all`.
+  The `rcu-lazy` shrinker and the `qhimark` backlog flush are untouched. Measure:
+  `trace_rcu_nocb_wake` reason `WakeLazy` over a screen-off window.
+- `f2fs`: `DEF_GC_THREAD_NOGC_SLEEP_TIME` 5 → 15 min. Only the "found nothing to
+  reclaim" re-poll; the demand path (`f2fs_balance_fs` → `fggc_wq`, `GC_MERGE`)
+  is separate. 12 → 4 confirmed-idle wakes per hour. Live-tunable at
+  `gc_no_gc_sleep_time`.
+- `boeffla_wl_blocker`: `sscanf("%s")` into a 1024-byte array bounded to
+  `%1023s` with a `static_assert` tying the literal to the buffer. A 1024-byte
+  write overflowed one NUL into `list_wl_default`. Root-only sysfs.
+- `f2fs`: duplicate `set_task_ioprio()` in `f2fs_start_gc_thread()` (merge
+  leftover) removed.
+- docs: Rules 11/12 were present twice since the lts176 merge (stale copy
+  dropped); Rule 9's "HZ worry retired" replaced with the real mechanism.
+
+**Refuted. Do not re-propose without the named evidence:**
+- `HZ` 300 → 250. `kernel/Kconfig.hz` also defaults to 300 (`bf54ced6af76`), so
+  the defconfig-only revert that was proposed changes nothing. The vendor-module
+  jiffies skew is real (Rule 9); a revert changes both lines and is judged by a
+  120 Hz frame-pacing A/B, not by boot.
+- ThinLTO. Rule 9 policy: experiment only, never a release Image. Also
+  `FRAME_WARN=0` here, so nothing guards against cross-TU inlining growing stack
+  frames on a 16 KB `VMAP_STACK` under `UBSAN_TRAP` — an overflow is a panic,
+  not a log line. Experiment path: gate + 30 min mixed-load soak (game, camera,
+  audio, app churn) with pstore watched.
+- `compaction_proactiveness=0` as a kernel default. The DT already writes it:
+  `init.kernel.post_boot.sh:130`, unconditionally, every boot.
+- `sched_util_clamp_min_rt_default` < 1024. No bounded value; `kernel/sched/walt`
+  is dead code here (`SCHED_WALT` unset), the vendor `walt.ko`'s uclamp use is
+  unknowable from this tree, and audio/input RT threads rely on the floor.
+- Cross-cluster cache-hot migration inertia. SM8635 has one L3 shared by all
+  eight CPUs (`cliffs.dtsi` `L3_0`) and `SCHED_CLUSTER` is unset: the proposed
+  `SD_SHARE_PKG_RESOURCES` gate would never fire.
+- Dropping the Spectre-BHB loop on the A720s. ~40–80 cycles per EL0→EL1 entry
+  on three cores, unmeasurable, and a security trade.
+- memcg periodic stats flush 2 s → 8 s. `cgroup_rstat_flush` only walks cgroups
+  with pending updates and the work is deferrable; the saving was overstated and
+  it shifts work onto the synchronous threshold path. Built, then dropped.
+- f2fs discard idle poll, softlockup `watchdog_thresh`, `sync_on_suspend`:
+  runtime sysfs/sysctl knobs. Theettam Tweaks territory (Rule 9), not Image
+  defaults.
+- MGLRU `min_ttl_ms` > 0: makes kswapd call `out_of_memory()` directly,
+  bypassing lmkd. `MEMCG_KMEM` off: struct layout, and the static key flips on
+  with the first app memcg anyway. `watermark_boost_factor`: already 0.
+  GC kthread to `SCHED_IDLE`: Rule 8, priority inversion under `GC_MERGE`.
+  Boeffla default list: no citable peridot wakeup-source names in tree, and Rule 9
+  records the VoLTE breakage the last populated list caused. `menu` → `teo`:
+  vendor `qcom_lpm.ko` (rating 50) displaces either at probe.
+
+**Pre-existing facts worth knowing, no change made:** `kernel/sched/walt/` in
+this tree is not what runs (`SCHED_WALT` unset; the binary comes from
+`vendor_dlkm`); every kernel-governed thermal cooling device sits at
+`cur_state=0` (Rule 12), so in-tree thermal governor tuning has no effect here;
+the CPU half of `80accb269363` stays inert; `PAGE_REPORTING`/`BALLOON_COMPACTION`
+and the unused `menu`/`teo`/`schedutil`/`conservative` governors are compiled in
+and cost nothing at runtime.
+
 ---
 **TL;DR for a bootable build:** start from `theettam-2.7`, change nothing in the
 KMI, keep the two post-merge fixes and the reverts, use the pins in
