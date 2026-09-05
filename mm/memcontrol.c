@@ -593,7 +593,7 @@ static atomic_t stats_flush_ongoing = ATOMIC_INIT(0);
 static atomic_t stats_flush_threshold = ATOMIC_INIT(0);
 static u64 flush_next_time;
 
-#define FLUSH_TIME (2UL*HZ)
+#define FLUSH_TIME (8UL*HZ)
 
 /*
  * Accessors to ensure that preemption is disabled on PREEMPT_RT because it can
