@@ -116,11 +116,15 @@ if [ "$HAVE_ROOT" = 1 ]; then
   else
     NH="$(dm | grep -cE "$HARD" | tr -d ' ')"
     UNKNOWN=""; KNOWN=""
+    # Suffix match, not exact: modules built by a ROM's inline kernel build log
+    # their site as ../../../../../../kernel/xiaomi/sm8635/drivers/... and the
+    # same WARN_ON must be recognised whichever tree compiled the module.
     for site in $(dm | grep -oE 'WARNING: CPU: [0-9]+ PID: [0-9]+ at [^ ]+' | awk '{print $NF}' | sort -u); do
-      case " $KNOWN_WARN " in
-        *" $site "*) KNOWN="$KNOWN $site" ;;
-        *) UNKNOWN="$UNKNOWN $site" ;;
-      esac
+      hit=""
+      for k in $KNOWN_WARN; do
+        case "$site" in *"$k") hit=1; break ;; esac
+      done
+      if [ -n "$hit" ]; then KNOWN="$KNOWN $site"; else UNKNOWN="$UNKNOWN $site"; fi
     done
     if [ "${NH:-1}" -eq 0 ] 2>/dev/null && [ -z "$UNKNOWN" ]; then
       pass dmesg-clean "$NDM lines, 0 hard failures, no unexpected WARN_ON${KNOWN:+ (known vendor WARNs:$KNOWN)}"
