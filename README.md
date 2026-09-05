@@ -9,7 +9,6 @@
 [![SUSFS](https://img.shields.io/badge/SUSFS-v2.3.0-c084fc?style=for-the-badge&labelColor=0b1020)](https://gitlab.com/simonpunk/susfs4ksu)
 [![Downloads](https://img.shields.io/github/downloads/Mohithash/kernel_xiaomi_sm8635/total?style=for-the-badge&label=DOWNLOADS&labelColor=0b1020&color=fbbf24)](../../releases)
 [![License](https://img.shields.io/badge/license-GPL--2.0-60a5fa?style=for-the-badge&labelColor=0b1020)](COPYING)
-[![Boot tested](https://img.shields.io/badge/2.7-1%20of%206%20boot%20tested-fbbf24?style=for-the-badge&labelColor=0b1020)](../../releases/latest)
 [![KMI gate](https://img.shields.io/badge/KMI-CRC%20gated%20in%20CI-4f8cff?style=for-the-badge&labelColor=0b1020)](docs/BOOT-NOTES.md)
 
 **A custom GKI kernel for the Xiaomi `peridot` — POCO F6 / Redmi Turbo 3 (Snapdragon 8s Gen 3)**
@@ -59,8 +58,6 @@ Everything below is shared by **all** flavors, Premium included:
 > [!NOTE]
 > KSUN and SukiSU don't ship kernel-side SUSFS — those builds use a **hand-authored port** written for this
 > kernel. ReSukiSU implements SUSFS natively, so its pairing is the cleanest.
-> For 2.7, **only `sukisu-susfs` was flashed and booted** on peridot at 6.1.176; the other
-> flavors are compile-verified and KMI-gated. The release notes say which is which per flavor.
 >
 > DroidSpaces bootlooped twice during bring-up before the KABI-safe config was found (`SYSVIPC`
 > relocated into `ANDROID_KABI_RESERVE` slots so stock `vendor_dlkm` still loads). It now boots
@@ -300,93 +297,41 @@ but shifts an exported CRC fails the KMI gate instead of shipping a bootloop.
 
 ## <img src="https://img.shields.io/badge/-08-fbbf24?style=flat-square" height="18"> Changelog
 
-### 2.7 — 2026-09-04 — GKI 6.1.176
+### 2.7 — 2026-09-04
 
-Base moved from ACK `android14-6.1.175_r00` to `android14-6.1.176_r00`.
-613 non-merge commits. `theettam-2.7` is now the 176 branch.
+- Merged GKI `android14-6.1.176` (613 commits from 6.1.175)
+- Fixed binder UAF (`0387fef7d2ba`, `1934ab942d47`)
+- Fixed eventpoll `ep_remove` UAF (`e69716042404`)
+- Fixed iptables/ip6tables `GETINFO` kernel-pointer leak (`b28e2fcad3db`)
+- Fixed f2fs `write_end_io` UAF (`0d40b26377f8`)
+- Fixed USB gadget UDC UAF (`47455f9704a1`)
+- Fixed ipv6 MLD-query UAF (`53baa63a4183`)
+- Fixed xt_quota2 UAF in `q2_get_counter()` (`39905027d023`)
+- Fixed KMI gate: `symvers-diff.sh` sorted by locale while `join(1)` compares
+  bytewise, so rows could mis-pair and hide a CRC shift
+- Fixed CI: retry antman's glibc patch instead of failing on a mirror hiccup
+- Added `plain` flavor to CI, KMI-gated and not published
+- Added `postflash-check.sh`, `bench.sh`, `log-audit.sh`, `flash-recovery.sh`
+- Added BOOT-NOTES Rule 11 (security review past 176) and Rule 12 (what owns
+  the CPU and GPU clocks)
+- Accepted three xfrm CRC shifts from ACK's `struct xfrm_mgr` change
+  (`km_migrate`, `xfrm_register_km`, `xfrm_unregister_km`)
 
-Security fixes in that range that reach code compiled into this Image:
+### 2.6 — 2026-08-10
 
-    binder       0387fef7d2ba, 1934ab942d47   UAF. /dev/binder is open to every
-                                              installed app; highest-value item here
-    eventpoll    e69716042404 + 6 prereqs     ep_remove UAF
-    netfilter    b28e2fcad3db                 ipt/ip6t GETINFO copied a live percpu
-                                              pointer to userspace. KASLR defeat for
-                                              anything holding CAP_NET_ADMIN
-    f2fs         0d40b26377f8                 write_end_io UAF. /data is f2fs
-    usb gadget   47455f9704a1                 UDC UAF. dwc3 walks it on every cable
-                                              event. KABI-safe; ACK later reverted it
-                                              for a 6.12 presubmit, we keep it
-    ipv6         53baa63a4183                 MLD-query UAF, reachable from the LAN
+- SELinux fsck + adbd spoof
 
-Cherry-picked from ACK past 176 — the only fix beyond the tag that lands in
-compiled-in code:
+### 2.5 — 2026-08-05
 
-    netfilter    39905027d023                 xt_quota2: UAF in q2_get_counter()
-                                              error path
+- SELinux `fsck_untrusted` spoof
 
-Deliberately not taken:
+### 2.4.1 — 2026-08-03
 
-    fscrypt      c3e0109ec5e6, 2fd20b5fee78, f20ce2195cc1
-                 ACK could only land these by filing an ABI break (c0df533a5806):
-                 struct fscrypt_operations consumes android_kabi_reserved1 and
-                 fscrypt_master_key shrinks 872 -> 368 bytes. Google rebuilds the
-                 whole image; we flash Image only.
-    bluetooth    b178698e5ac5, cad04476381e   SCO UAF + lock ordering. CONFIG_BT=m,
-                 so they ship in system_dlkm/bluetooth.ko, which an Image flash does
-                 not replace. Zero effect here.
+- Theettam-branded installer
 
-KMI:
+### 2.4 — 2026-07-24
 
-    Three exported CRCs move against the 175 baselines — km_migrate,
-    xfrm_register_km, xfrm_unregister_km — all from ACK's struct xfrm_mgr change.
-    Listed in scripts/ci/kmi-baseline/accepted-drift.txt with the boot evidence
-    (444 stock vendor modules loaded, no version-magic errors). The gate still
-    fails on any other CHANGED or REMOVED symbol.
-
-Build and CI:
-
-    ci: symvers-diff.sh now forces LC_ALL=C and sorts on the key only. join(1)
-        compares bytewise while sort(1) collated by locale, so rows could
-        mis-pair — a missed CRC shift in the one check that runs before a flash.
-    ci: plain flavor built and KMI-gated, never zipped (SKIP_ZIP). It had no CI
-        coverage and it is the flavor that separates a base regression from a
-        root-integration one.
-    ci: retry antman's glibc patch. An Arch mirror hiccup (wget exit 8) failed a
-        job four seconds into toolchain setup, before any build step.
-
-New in scripts/device/:
-
-    postflash-check.sh   boot gate. Kernel release, config.gz scrub, dmesg by
-                         severity with this device's two known vendor WARNs
-                         allowlisted, module count, SELinux, telephony, SUSFS
-    bench.sh             fixed-work timing, per-OPP residency, cold-cache I/O,
-                         cold-start latency, thermal state
-    log-audit.sh         AVC denials by domain, tombstones dated against boot,
-                         service restart loops, sub-WARN kernel errors
-    flash-recovery.sh    unattended AnyKernel3 flash over adb via TWRP/OrangeFox
-
-Documented in docs/BOOT-NOTES.md:
-
-    Rule 11  security review past 176: taken, refused, and why
-    Rule 12  what actually owns the CPU and GPU clocks. mi_thermald caps both
-             from a step curve whose first rung trips at 25 C, so both big
-             clusters lose their top two OPPs permanently. The CPU half of
-             80accb269363 is inert here: the daemon writes scaling_max_freq
-             directly and never touches the cpufreq cooling devices.
-
-Tested: `sukisu-susfs` only — postflash-check PASS=11 FAIL=0, 444 stock modules,
-21.5k dmesg lines with no version-magic, module-load, panic, BUG, lockup or oops,
-and a VoLTE call active with audio over NR_SA. Other flavors compile-verified and
-KMI-gated. Screen-off drain not measured: adb runs over USB, so the device stayed
-charged and never entered suspend.
-
-### Earlier
-
-    2.6    2026-08-10   SELinux fsck+adbd spoof, all 7 flavors
-    2.5    2026-08-05   SELinux fsck_untrusted spoof
-    2.4.1  2026-08-03   Theettam-branded installer
-    2.4    2026-07-24   Mbappu edition
+- Mbappu edition
 
 ---
 
